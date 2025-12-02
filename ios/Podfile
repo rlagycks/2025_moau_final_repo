@@ -24,6 +24,9 @@ target 'moau' do
   )
 
   pod 'BVLinearGradient', :path => '../node_modules/react-native-linear-gradient'
+  pod 'KakaoSDKCommon'
+  pod 'KakaoSDKAuth'
+  pod 'KakaoSDKUser'
 
   post_install do |installer|
     react_native_post_install(

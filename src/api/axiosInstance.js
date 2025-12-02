@@ -41,9 +41,9 @@ api.interceptors.request.use(
   error => Promise.reject(error),
 );
 
-const refreshTokensRequest = async currentRefreshToken => {
-  if (!currentRefreshToken) {
-    throw new Error('No refresh token available');
+const refreshTokensRequest = async refreshToken => {
+  if (!refreshToken) {
+    throw new Error('No refresh token');
   }
 
   const plain = axios.create({
@@ -52,7 +52,7 @@ const refreshTokensRequest = async currentRefreshToken => {
   });
 
   const res = await plain.post('/auth/refresh', {
-    refreshToken: currentRefreshToken,
+    refreshToken,
   });
 
   return res.data;
@@ -64,7 +64,6 @@ api.interceptors.response.use(
   async error => {
     // console.error('Axios 요청 실패: ', error.config?.url, error.message);
     const originalRequest = error.config;
-
     const status = error.response?.status;
 
     //401 에러 + 토큰 재발급이 아직 진행 중이 아닐 때
@@ -86,51 +85,29 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      //   try {
-      //     const { accessToken, success } = await refreshAccessToken();
-
-      //     if (!success) throw new Error('refresh failed');
-
-      //     useAuthStore.getState().setAccessToken(accessToken);
-      //     processQueue(null, accessToken);
-      //     originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-      //     return api(originalRequest);
-      //   } catch (refreshError) {
-      //     processQueue(refreshError, null);
-
-      //     console.error('리프레시 토큰 만료. 로그아웃 필요.');
-      //     useAuthStore.getState().logout();
-      //     return Promise.reject(refreshError);
-      //   } finally {
-      //     isRefreshing = false;
-      //   }
-      // }
-
       try {
         const currentRefreshToken = useAuthStore.getState().refreshToken;
         if (!currentRefreshToken) throw new Error('Refresh token이 없습니다.');
 
-        const data = await refreshTokensRequest(currentRefreshToken);
-        const { accessToken, refreshToken: newRefreshToken } = data;
+        // const data = await refreshTokensRequest(currentRefreshToken);
+        const { accessToken, refreshToken: newRefreshToken } =
+          await refreshTokensRequest(currentRefreshToken);
 
         if (!accessToken)
           throw new Error('백엔드에서 accessToken이 반환되지 않았습니다');
 
-        // Save tokens to store and local storage (saveTokens handles AsyncStorage write)
         await saveTokens(accessToken, newRefreshToken);
-
-        // update zustand state (in case saveTokens didn't)
-        useAuthStore.getState().setTokens(accessToken, newRefreshToken);
 
         processQueue(null, accessToken);
 
-        originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
+
         console.error('리프레시 토큰 만료. 로그아웃 처리합니다.', refreshError);
         useAuthStore.getState().logout();
+
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
@@ -146,10 +123,7 @@ api.interceptors.response.use(
 
       // 토큰 확인
       const token = useAuthStore.getState().accessToken;
-      console.error(
-        '현재 저장된 토큰:',
-        token ? `${token.substring(0, 12)}...` : '없음',
-      );
+      console.error('현재 저장된 토큰: ', token || '없음');
     }
 
     return Promise.reject(error);

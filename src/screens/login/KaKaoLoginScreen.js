@@ -4,7 +4,6 @@ import {
   View,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -13,56 +12,30 @@ import BoldText from '../../components/customText/ExtraBoldText';
 import SemiBoldText from '../../components/customText/SemiBoldText';
 
 import { saveTokens } from '../../services/authService';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const KakaoLoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
 
-  //   const handleKakaoLogin = async () => {
-  //     try {
-  //       setLoading(true);
-
-  //       const result = await login();
-  //       const kakaoAccessToken = result.accessToken;
-
-  //       console.log('카카오 access token: ', kakaoAccessToken);
-
-  //       const response = await fetch(
-  //         'https://moau.store/api/auth/kakao/code/exchange',
-  //         {
-  //           method: 'POST',
-  //           headers: { 'Content-Type': 'application/json' },
-  //           body: JSON.stringify({
-  //             accessToken: kakaoAccessToken,
-  //           }),
-  //         },
-  //       );
-
-  //       const jwt = await response.json();
-
-  //       if (!jwt.accessToken || !jwt.refreshToken) {
-  //         throw new Error('JWT 응답 형식이 올바르지 않습니다.');
-  //       }
-
-  //       console.log('서버 JWT:', jwt);
-
-  //       saveTokens(jwt.accessToken, jwt.refreshToken);
-
-  //       navigation.replace('UserMain');
-  //     } catch (err) {
-  //       console.error('카카오 로그인 실패:', err);
-  //       Alert.alert('오류', '카카오 로그인에 실패했습니다.');
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
+  const kakaoLogin = useAuthStore(state => state.kakaoLogin);
+  const startTokenAutoRefresh = useAuthStore(
+    state => state.stateTokenAutoRefresh,
+  );
 
   const handleKakaoLogin = async () => {
     setLoading(true);
     try {
-      navigation.replace('UserMain');
+      const success = await kakaoLogin();
+
+      if (!success) {
+        throw new Error('카카오 로그인 과정에서 오류 발생');
+      }
+
+      startTokenAutoRefresh();
+      navigation.navigate('UserMain');
     } catch (err) {
-      console.error('임시 로그인 실패:', err);
-      Alert.alert('오류', '로그인 과정에서 문제가 발생했습니다.');
+      console.error('카카오 로그인 실패: ', err);
+      Alert.alert('오류', '로그인 과정에서 문제가 발생했습니다');
     } finally {
       setLoading(false);
     }

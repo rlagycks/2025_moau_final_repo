@@ -83,7 +83,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const { refreshToken } = useAuthStore.getState();
+        const refreshToken = useAuthStore.getState().refreshToken;
         const { accessToken, refreshToken: newRefresh } =
           await refreshTokensRequest(refreshToken);
 

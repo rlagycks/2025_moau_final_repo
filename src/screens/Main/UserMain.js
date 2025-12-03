@@ -197,7 +197,10 @@ const UserMain = ({ navigation }) => {
                   <TouchableOpacity
                     style={styles.joinButton}
                     onPress={() =>
-                      navigation.navigate('GroupMain', { teamId: group.teamId })
+                      navigation.navigate('GroupMain', {
+                        teamId: group.id,
+                        // groupName: group.name,
+                      })
                     }
                   >
                     <SemiBoldText style={styles.joinText}>참여</SemiBoldText>
@@ -709,6 +712,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     marginRight: 14,
+    borderRadius: 50,
   },
   groupName: {
     color: '#3E247C',

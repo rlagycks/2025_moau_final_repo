@@ -15,6 +15,7 @@ import SemiBoldText from '../../../components/customText/SemiBoldText';
 import ManagePageNavHeader from '../../../components/nav/ManagePageNavHeader';
 import { getGroup, updateGroup } from '../../../services/groupService';
 import { useGroupStore } from '../../../store/useGroupStore';
+import { deleteGroup } from '../../../services/groupService';
 
 const GroupManage = ({ route, navigation }) => {
   const params = route?.params || {};
@@ -313,6 +314,49 @@ const GroupManage = ({ route, navigation }) => {
               ) : (
                 <SemiBoldText style={styles.buttonText}>저장하기</SemiBoldText>
               )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => {
+                Alert.alert(
+                  '그룹 삭제',
+                  '정말로 이 그룹을 삭제하시겠습니까?\n삭제한 그룹은 복구할 수 없습니다.',
+                  [
+                    { text: '취소', style: 'cancel' },
+                    {
+                      text: '삭제',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          setLoading(true);
+
+                          const result = await deleteGroup(teamId);
+                          console.log('그룹 삭제 성공: ', result);
+
+                          await fetchGroups();
+
+                          Alert.alert('삭제 완료', '그룹이 삭제되었습니다', [
+                            {
+                              text: '확인',
+                              onPress: () => navigation.navigate('UserMain'),
+                            },
+                          ]);
+                        } catch (error) {
+                          console.error('그룹 삭제 에러:', error);
+                          Alert.alert('오류', '그룹 삭제에 실패했습니다.');
+                        } finally {
+                          setLoading(false);
+                        }
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <SemiBoldText style={styles.deleteButtonText}>
+                그룹 삭제
+              </SemiBoldText>
             </TouchableOpacity>
           </View>
         </ScrollView>

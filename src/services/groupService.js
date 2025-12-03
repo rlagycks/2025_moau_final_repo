@@ -66,3 +66,13 @@ export const updateGroup = async (teamId, payload) => {
     throw error;
   }
 };
+
+export const deleteGroup = async teamId => {
+  try {
+    const response = await api.delete(`/teams/${teamId}`);
+    return response.data;
+  } catch (error) {
+    console.error('그룹 삭제 api 에러', error);
+    throw error;
+  }
+};

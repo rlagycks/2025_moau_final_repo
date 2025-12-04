@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from "react";
-import { ScrollView, View, StyleSheet, Image, TouchableOpacity, KeyboardAvoidingView, Platform, TextInput} from "react-native";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { ScrollView, View, StyleSheet, Image, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator} from "react-native";
 import RegularText from "../../../components/customText/RegularText";
 import SemiBoldText from "../../../components/customText/SemiBoldText";
-import { noticeMockData } from "../../../data/notice";
 import PageNavHeader from "../../../components/nav/PageNavHeader";
 import dayjs from "dayjs";
 import CommentInput from "../../../components/comment/CommentInput";
+import * as noticeService from "../../../services/noticeService";
 
 const useAnonymousMapping = (comments) => {
   return useMemo(() => {
@@ -37,14 +37,14 @@ const useAnonymousMapping = (comments) => {
 };
 
 const GroupNoticeDetail = ({ route, navigation }) => {
-  const { groupId, noticeId, isAdmin } = route.params;
+  const teamId = route.params?.teamId ?? route.params?.groupId;
+  const noticeId = route.params?.noticeId;
+  const isAdmin = route.params?.isAdmin ?? false;
 
-  const notice = noticeMockData[groupId]?.find(
-    (n) => n.id === noticeId
-  );
-
-  const [selectedOption, setSelectedOption] = useState(null);
-  const [voteSubmitted, setVoteSubmitted] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedOptions, setSelectedOptions] = useState([]);
+  const [voteLoading, setVoteLoading] = useState(false);
 
   const [comments, setComments] = useState([]);
   const [inputText, setInputText] = useState("");
@@ -52,6 +52,33 @@ const GroupNoticeDetail = ({ route, navigation }) => {
   const [isAnonymousComment, setIsAnonymousComment] = useState(true);
 
   const anonymousNameMap = useAnonymousMapping(comments);
+
+  const normalizeComments = commentList =>
+    (commentList || []).map(c => ({
+      ...c,
+      replies: c.replies || c.children || [],
+    }));
+
+  const loadNoticeDetail = useCallback(async () => {
+    if (!teamId || !noticeId) return;
+
+    setLoading(true);
+    try {
+      const data = await noticeService.getNoticeDetail(teamId, noticeId);
+      const detail = data?.data ?? data;
+      setNotice(detail);
+      setComments(normalizeComments(detail?.comments));
+    } catch (err) {
+      console.error("공지 상세 조회 실패:", err);
+      Alert.alert("오류", "공지 정보를 불러올 수 없습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, [teamId, noticeId]);
+
+  useEffect(() => {
+    loadNoticeDetail();
+  }, [loadNoticeDetail]);
 
   const addComment = () => {
     if (!inputText.trim()) return;
@@ -99,6 +126,66 @@ const GroupNoticeDetail = ({ route, navigation }) => {
     return comments.reduce((acc, c) => acc + 1 + c.replies.length, 0);
   };
 
+  const poll = notice?.poll || notice?.vote;
+  const voteOptions = poll?.options || poll?.pollOptions || [];
+  const pollId = poll?.id || notice?.pollId;
+  const isMultiple =
+    poll?.allowMultiple || poll?.multiple || poll?.isMultiple || poll?.multiSelect || false;
+
+  const handleSelectOption = optionId => {
+    if (isMultiple) {
+      setSelectedOptions(prev =>
+        prev.includes(optionId)
+          ? prev.filter(id => id !== optionId)
+          : [...prev, optionId],
+      );
+      return;
+    }
+    setSelectedOptions([optionId]);
+  };
+
+  const handleVote = async () => {
+    if (!pollId) {
+      Alert.alert("오류", "투표 정보를 찾을 수 없습니다.");
+      return;
+    }
+    if (selectedOptions.length === 0) {
+      Alert.alert("알림", "옵션을 선택해 주세요.");
+      return;
+    }
+
+    setVoteLoading(true);
+    try {
+      await noticeService.vote(teamId, pollId, {
+        pollOptionIds: selectedOptions,
+      });
+      Alert.alert("알림", "투표가 완료되었습니다.");
+      setSelectedOptions([]);
+      await loadNoticeDetail();
+    } catch (err) {
+      console.error("투표 실패:", err);
+      Alert.alert("오류", "투표에 실패했습니다. 다시 시도해 주세요.");
+    } finally {
+      setVoteLoading(false);
+    }
+  };
+
+  if (!teamId || !noticeId) {
+    return (
+      <View style={styles.center}>
+        <SemiBoldText>공지 정보를 불러올 수 없습니다.</SemiBoldText>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#7242E2" />
+      </View>
+    );
+  }
+
   if (!notice) {
     return (
         <View style={styles.center}>
@@ -107,10 +194,12 @@ const GroupNoticeDetail = ({ route, navigation }) => {
     )
   }
 
-const handleVote = () => {
-        if (selectedOption === null) return;
-        setVoteSubmitted(true);
-    };
+  const authorName = notice.authorName || notice.writerName || notice.createdByName || "알 수 없음";
+  const createdAt = notice.createdAt || notice.createdDate || "";
+  const title = notice.title || notice.name || "";
+  const content = notice.content || notice.body || "";
+  const images = notice.images || notice.imageUrls || notice.attachments || [];
+  const totalCommentCount = notice.commentCount ?? getTotalCommentCount();
 
   return (
     <KeyboardAvoidingView
@@ -123,19 +212,19 @@ const handleVote = () => {
                 {/* 제목 */}
                 <View style={styles.postSection}>
                     <View style={styles.authorSection}>
-                        <SemiBoldText style={styles.authorName}>{notice.authorName}</SemiBoldText>
-                        <SemiBoldText style={styles.date}>{notice.createdAt}</SemiBoldText>
+                        <SemiBoldText style={styles.authorName}>{authorName}</SemiBoldText>
+                        <SemiBoldText style={styles.date}>{createdAt}</SemiBoldText>
                     </View>
-                    <SemiBoldText style={styles.title}>{notice.title}</SemiBoldText>
+                    <SemiBoldText style={styles.title}>{title}</SemiBoldText>
                     <View style={styles.divider} />
 
-                    {notice.images?.length > 0 && (
+                    {images?.length > 0 && (
                         <ScrollView 
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         style={styles.imageScroll}
                         contentContainerStyle={styles.imageRow}>
-                            {notice.images.map((img, idx) => (
+                            {images.map((img, idx) => (
                                 <Image key={idx}
                                     source={{uri: img}}
                                     style={styles.noticeImage}
@@ -146,22 +235,24 @@ const handleVote = () => {
                     )}
 
                     {/* 내용 */}
-                    <RegularText style={styles.content}>{notice.content}</RegularText>
+                    <RegularText style={styles.content}>{content}</RegularText>
 
                     {/* 투표 */}
-                    {notice.vote && (
+                    {voteOptions.length > 0 && (
                         <View style={styles.voteContainer}>
-                        {notice.vote.options.map((opt) => {
-                            const isSelected = selectedOption === opt.id;
+                        {voteOptions.map((opt, idx) => {
+                            const optionId = opt.id ?? opt.optionId;
+                            const optionLabel = opt.text || opt.content || opt.title;
+                            const isSelected = selectedOptions.includes(optionId);
 
                             return (
                             <TouchableOpacity
-                                key={opt.id}
+                                key={optionId ?? idx}
                                 style={[
                                 styles.voteOption,
                                 {backgroundColor: isSelected ? "#EEE7FF" : "#F4F4F4"}
                                 ]}
-                                onPress={() => setSelectedOption(opt.id)}
+                                onPress={() => handleSelectOption(optionId)}
                             >
                                 <Image source={
                                     isSelected
@@ -171,7 +262,7 @@ const handleVote = () => {
                                     style={styles.voteCheckBox}
                             />
                                 <SemiBoldText style={{color: isSelected ? "#7242E2" : "#808080", fontSize: 16}}>
-                                {opt.text}
+                                {optionLabel}
                                 </SemiBoldText>
                             </TouchableOpacity>
                             );
@@ -181,13 +272,14 @@ const handleVote = () => {
                             style={[
                                 styles.voteButton,
                                 {
-                                    backgroundColor: voteSubmitted ? "#B5B2B2" : "#7242E2"
+                                    backgroundColor: voteLoading ? "#B5B2B2" : "#7242E2"
                                 }
                             ]}
+                            disabled={voteLoading}
                             onPress={handleVote}
                         >
                             <SemiBoldText style={{color: "#FFFFFF", fontSize: 19}}>
-                                투표하기
+                                {voteLoading ? "투표 중..." : "투표하기"}
                             </SemiBoldText>
                         </TouchableOpacity>
                         </View>
@@ -210,7 +302,7 @@ const handleVote = () => {
                     <Image source={require("../../../assets/img/commentCountIcon.png")}
                     style={styles.commentIcon} />
                     <SemiBoldText style={styles.commentCountText}>
-                        {getTotalCommentCount()}
+                        {totalCommentCount}
                     </SemiBoldText>
                 </View>
 

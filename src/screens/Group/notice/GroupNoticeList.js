@@ -1,38 +1,83 @@
-import React, { useState } from "react";
-import { ScrollView, View, TouchableOpacity, StyleSheet, Image} from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { ScrollView, View, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from "react-native";
 import RegularText from "../../../components/customText/RegularText";
 import SemiBoldText from "../../../components/customText/SemiBoldText";
-import { noticeMockData } from "../../../data/notice";
 import PageNavHeader from "../../../components/nav/PageNavHeader";
 import SearchBar from "../../../components/SearchBar";
+import * as noticeService from "../../../services/noticeService";
 
 const GroupNoticeList = ({ navigation, route }) => {
-  const { groupId, isAdmin } = route.params;
+  const teamId = route.params?.teamId ?? route.params?.groupId;
+  const isAdmin = route.params?.isAdmin ?? false;
 
-  const notices = noticeMockData[groupId] || [];
-  const [category, setCategory] = useState("일반")
+  const [notices, setNotices] = useState([]);
+  const [category, setCategory] = useState("전체")
+  const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState("");
+
+  useEffect(() => {
+    if (!teamId) return;
+    fetchNotices();
+  }, [teamId]);
+
+  const fetchNotices = async (page = 0) => {
+    setLoading(true);
+    try {
+      const data = await noticeService.getNotices(teamId, page);
+      const content = data?.content ?? data?.notices ?? data;
+      setNotices(Array.isArray(content) ? content : []);
+    } catch (err) {
+      console.error("공지 목록 불러오기 실패:", err);
+      setNotices([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePress = (noticeId) => {
+    if (!noticeId) return;
     navigation.navigate("GroupNoticeDetail", {
-      groupId,
+      groupId: teamId,
+      teamId,
       noticeId,
       isAdmin
     });
   };
 
-  const filteredNotices = notices.filter((item) => {
-    if (category === "전체") return true;
-    if (category === "투표") return item.vote;
-    if (category === "일반") return !item.vote;
-  })
+  const isVoteNotice = (notice) => {
+    return Boolean(
+      notice?.vote ||
+      notice?.poll ||
+      notice?.pollId ||
+      (notice?.voteOptions && notice.voteOptions.length > 0) ||
+      notice?.hasVote ||
+      notice?.type === "VOTE"
+    );
+  };
+
+  const filteredNotices = useMemo(() => {
+    const byCategory = notices.filter((item) => {
+      const hasVote = isVoteNotice(item);
+      if (category === "전체") return true;
+      if (category === "투표") return hasVote;
+      if (category === "일반") return !hasVote;
+      return true;
+    });
+
+    if (!keyword.trim()) return byCategory;
+
+    return byCategory.filter((notice) => {
+      const title = notice.title || "";
+      const content = notice.content || "";
+      const lowerKeyword = keyword.toLowerCase();
+      return (
+        title.toLowerCase().includes(lowerKeyword) ||
+        content.toLowerCase().includes(lowerKeyword)
+      );
+    });
+  }, [notices, category, keyword]);
 
   const categoryButtons = ["전체", "투표", "일반"];
-
-  const [keyword, setKeyword] = useState("");
-  
-      const filteredPosts = notices.filter(notice =>
-          notice.title.includes(keyword) || notice.content.includes(keyword)
-      );
 
   return (
     <View style={styles.container}>
@@ -70,40 +115,58 @@ const GroupNoticeList = ({ navigation, route }) => {
             />
             <View style={styles.noticeSection}>
                 
-                {filteredNotices.map((item) => (
-                <TouchableOpacity
-                key={item.id}
-                style={styles.card}
-                onPress={() => handlePress(item.id)}
-                >
-                    <View style={styles.authorSection}>
-                        <SemiBoldText style={styles.authorName}>{item.authorName}</SemiBoldText>
-                        <SemiBoldText style={styles.createdAt}>{item.createdAt}</SemiBoldText>
-                    </View>
-                        <SemiBoldText style={styles.title}>{item.title}</SemiBoldText>
-                                            
-                    <RegularText numberOfLines={2} style={styles.content}>{item.content}</RegularText>
-
-                {item.images?.length > 0 && (
-                    <Image
-                    source={{ uri: item.images[0] }}
-                    style={styles.thumbnail}
-                    />
+                {loading && (
+                  <ActivityIndicator size="large" color="#7242E2" style={{ marginTop: 20 }} />
                 )}
 
-                {item.vote && (
-                    <View style={styles.voteBadge}>
-                        <RegularText style={styles.voteText}>투표 포함</RegularText>
-                    </View>
+                {!loading && filteredNotices.length === 0 && (
+                  <RegularText style={{ color: "#808080" }}>등록된 공지가 없습니다.</RegularText>
                 )}
 
-                <View style={styles.footerRow}>
-                    <Image source={require("../../../assets/img/commentCountIcon.png")}
-                    style={styles.commentCountIcon} />
-                    <RegularText style={styles.commentCountText}>{item.commentCount || 0}</RegularText>
-                </View>
-                </TouchableOpacity>
-            ))}
+                {!loading && filteredNotices.map((item, index) => {
+                  const noticeId = item.id ?? item.noticeId;
+                  const authorName = item.authorName || item.writerName || item.createdByName || "알 수 없음";
+                  const createdAt = item.createdAt || item.createdDate || "";
+                  const images = item.images || item.imageUrls || item.attachments || [];
+                  const hasVote = isVoteNotice(item);
+                  const commentCount = item.commentCount ?? item.commentsCount ?? item.comments?.length ?? 0;
+                  const title = item.title || item.name || "";
+                  const content = item.content || item.body || "";
+
+                  return (
+                    <TouchableOpacity
+                    key={noticeId ?? index}
+                    style={styles.card}
+                    onPress={() => handlePress(noticeId)}
+                    >
+                        <View style={styles.authorSection}>
+                            <SemiBoldText style={styles.authorName}>{authorName}</SemiBoldText>
+                            <SemiBoldText style={styles.createdAt}>{createdAt}</SemiBoldText>
+                        </View>
+                            <SemiBoldText style={styles.title}>{title}</SemiBoldText>
+                                                
+                        <RegularText numberOfLines={2} style={styles.content}>{content}</RegularText>
+
+                    {images?.length > 0 && (
+                        <Image
+                        source={{ uri: images[0] }}
+                        style={styles.thumbnail}
+                        />
+                    )}
+
+                    {hasVote && (
+                        <View style={styles.voteBadge}>
+                            <RegularText style={styles.voteText}>투표 포함</RegularText>
+                        </View>
+                    )}
+
+                    <View style={styles.footerRow}>
+                        <Image source={require("../../../assets/img/commentCountIcon.png")}
+                        style={styles.commentCountIcon} />
+                        <RegularText style={styles.commentCountText}>{commentCount}</RegularText>
+                    </View>
+                    </TouchableOpacity>
+                )})}
             </View>
             
             </ScrollView>

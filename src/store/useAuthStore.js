@@ -7,6 +7,7 @@ import {
   exchangeKakaoToken,
   saveTokens,
   refreshAccessToken,
+  logoutApi,
 } from '../services/authService';
 
 export const useAuthStore = create(
@@ -28,16 +29,22 @@ export const useAuthStore = create(
       setUserInfo: (nickname, userId) => set({ nickname, userId }),
 
       // setAdminToken: adminToken => set({ adminToken }),
-      logout: () => {
+      logout: async () => {
         clearInterval(get()._refreshInterval);
-        set({
-          accessToken: null,
-          refreshToken: null,
-          adminToken: null,
-          nickname: null,
-          userId: null,
-          _refreshInterval: null,
-        });
+        try {
+          await logoutApi();
+        } catch (err) {
+          console.error('서버 로그아웃 실패:', err);
+        } finally {
+          set({
+            accessToken: null,
+            refreshToken: null,
+            adminToken: null,
+            nickname: null,
+            userId: null,
+            _refreshInterval: null,
+          });
+        }
       },
 
       // 카카오 로그인

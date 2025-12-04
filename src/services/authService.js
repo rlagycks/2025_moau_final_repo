@@ -65,6 +65,16 @@ export const refreshAccessToken = async () => {
   }
 };
 
+export const logoutApi = async () => {
+  try {
+    const response = await api.post('/auth/logout');
+    return response.data;
+  } catch (err) {
+    console.error('로그아웃 API 호출 실패:', err);
+    throw err;
+  }
+};
+
 export const getMyProfile = async () => {
   try {
     const response = await api.get('/users/me');

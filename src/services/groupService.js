@@ -5,7 +5,6 @@ export const createGroup = async data => {
     const payload = {
       name: data.name,
       description: data.description || '',
-      image: data.image || null,
     };
 
     const response = await api.post('/teams', payload);
@@ -19,7 +18,7 @@ export const createGroup = async data => {
 export const joinGroupByCode = async inviteCode => {
   try {
     const response = await api.post('/teams/join-requests', {
-      invite_code: inviteCode,
+      inviteCode,
     });
     return response.data;
   } catch (error) {

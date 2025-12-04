@@ -18,6 +18,7 @@ const NoticePost = ({navigation}) => {
 
   const [voteOptions, setVoteOptions] = useState([""]);
   const [voteType, setVoteType] = useState("single");
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -93,7 +94,10 @@ const NoticePost = ({navigation}) => {
         useVote && filteredOptions.length > 0
           ? {
               title: title || '투표',
-              items: filteredOptions,
+              allowMultiple: voteType === 'multi',
+              isAnonymous,
+              deadline: null,
+              options: filteredOptions,
             }
           : undefined;
 
@@ -177,11 +181,11 @@ const NoticePost = ({navigation}) => {
                           <SemiBoldText style={styles.voteTitle}>투표 옵션</SemiBoldText>
 
                           {/* 단일 / 중복 투표 선택 */}
-                          <View style={styles.voteTypeRow}>
-                            <TouchableOpacity
-                            style={[styles.typeBtn, voteType === "single" && styles.typeBtnActive]}
-                            onPress={() => setVoteType("single")}
-                            >
+                      <View style={styles.voteTypeRow}>
+                        <TouchableOpacity
+                        style={[styles.typeBtn, voteType === "single" && styles.typeBtnActive]}
+                        onPress={() => setVoteType("single")}
+                        >
                               <SemiBoldText style={[styles.typeBtnText, 
                                 voteType === "single"
                                 ? styles.typeBtnTextActive
@@ -197,9 +201,26 @@ const NoticePost = ({navigation}) => {
                                 voteType === "multi"
                                 ? styles.typeBtnTextActive
                                 : styles.typeBtnTextInactive
-                              ]}>중복</SemiBoldText>
-                            </TouchableOpacity>
-                          </View>
+                          ]}>중복</SemiBoldText>
+                        </TouchableOpacity>
+                      </View>
+
+                          <TouchableOpacity
+                            style={styles.anonToggle}
+                            onPress={() => setIsAnonymous(prev => !prev)}
+                          >
+                            <Image
+                              source={
+                                isAnonymous
+                                  ? require("../../../assets/img/noticeCheckPurpleIcon.png")
+                                  : require("../../../assets/img/noticeVoteCheckIcon.png")
+                              }
+                              style={styles.checkboxIcon}
+                            />
+                            <SemiBoldText style={styles.anonText}>
+                              익명 투표
+                            </SemiBoldText>
+                          </TouchableOpacity>
                           
                           {voteOptions.map((opt, idx) => (
                             <View key={idx} style={styles.voteInputRow}>
@@ -292,8 +313,18 @@ const styles = StyleSheet.create({
     },
     imagePreviewScroll: {
       width: "100%",
-      marginBottom: 15,
-    },
+    marginBottom: 15,
+  },
+  anonToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  anonText: {
+    color: "#3E247C",
+    fontSize: 14,
+  },
     imagePreviewContent: {
       flexDirection: "row",
       gap: 5,

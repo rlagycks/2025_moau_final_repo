@@ -4,14 +4,17 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import LinearGradient from 'react-native-linear-gradient';
 // import {groupReceiptData} from '../../data/receipts';
 import SemiBoldText from '../../components/customText/SemiBoldText';
 import BoldText from '../../components/customText/BoldText';
 
-import { getGroup, joinGroupByCode } from '../../services/groupService';
+import { getGroup, getJoinRequests } from '../../services/groupService';
+import * as receiptService from '../../services/receiptService';
+import { useFocusEffect } from '@react-navigation/native';
 
 const ManagerMain = ({ navigation, route }) => {
   const teamId = route?.params?.teamId;
@@ -22,27 +25,55 @@ const ManagerMain = ({ navigation, route }) => {
   //   const requestCount = receiptList.length;
 
   const [groupInfo, setGroupInfo] = useState(null);
-  const [joinRequests, setJoinRequests] = useState([]);
-  //   const [pendingReceipts, setPendingReceipts] = useState([]);
+  const [requestCount, setRequestCount] = useState(0);
+  const [receiptCount, setReceiptCount] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const group = await getGroup(teamId);
-        setGroupInfo(group);
+  const loadDashboard = useCallback(async () => {
+    if (!teamId) return;
+    try {
+      setLoading(true);
+      const [group, joinReqs, receipts] = await Promise.all([
+        getGroup(teamId),
+        getJoinRequests(teamId),
+        receiptService.getReceipts(teamId),
+      ]);
+      setGroupInfo(group);
+      setRequestCount(Array.isArray(joinReqs) ? joinReqs.length : 0);
 
-        const reqs = await joinGroupByCode(teamId);
-        setJoinRequests(reqs);
+      const receiptList = Array.isArray(receipts?.content)
+        ? receipts.content
+        : Array.isArray(receipts)
+        ? receipts
+        : [];
+      const waiting = receiptList.filter(
+        r =>
+          r.status === 'WAITING' ||
+          r.reviewStatus === 'WAITING' ||
+          r.state === 'WAITING' ||
+          !r.status,
+      );
+      setReceiptCount(waiting.length);
+    } catch (err) {
+      console.error('ManagerMain 로딩 에러: ', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [teamId]);
 
-        // const receipts = await getPendingReceipts(teamId);
-        // setPendingReceipts(receipts);
-      } catch (err) {
-        console.error('MangerMain 로딩 에러: ', err);
-      }
-    })();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard();
+    }, [loadDashboard]),
+  );
 
-  if (!groupInfo) return null;
+  if (!groupInfo) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color="#7242E2" size="large" />
+      </View>
+    );
+  }
 
   return (
     <LinearGradient
@@ -73,7 +104,7 @@ const ManagerMain = ({ navigation, route }) => {
               onPress={() => navigation.navigate('RequestJoin', { teamId })}
             >
               <SemiBoldText style={styles.groupRequestText}>
-                그룹 승인 요청 {joinRequests.length}
+                그룹 승인 요청 {requestCount}건
               </SemiBoldText>
             </TouchableOpacity>
           </View>
@@ -83,53 +114,13 @@ const ManagerMain = ({ navigation, route }) => {
           <View style={styles.secondContainer}>
             <View style={styles.receiptSection}>
               <SemiBoldText style={styles.textSection}>
-                승인 요청된 영수증 {requestCount}
+                승인 요청된 영수증 {receiptCount}건
               </SemiBoldText>
-              {receiptList.slice(0, 2).map(receipt => (
-                <TouchableOpacity
-                  key={receipt.id}
-                  style={styles.receiptCard}
-                  onPress={() =>
-                    navigation.navigate('ReqReceiptDetail', {
-                      place: receipt.place,
-                      amount: receipt.amount,
-                      date: receipt.date,
-                      card: receipt.card,
-                      author: receipt.author,
-                      desc: receipt.desc,
-                    })
-                  }
-                >
-                  <Image
-                    source={receipt.Postimage}
-                    style={styles.receiptImage}
-                  />
-
-                  <View style={styles.authorCard}>
-                    <SemiBoldText style={styles.authorName}>
-                      {receipt.author}
-                    </SemiBoldText>
-                    <SemiBoldText style={styles.receiptDesc}>
-                      {receipt.desc}
-                    </SemiBoldText>
-                    <SemiBoldText style={styles.receiptDate}>
-                      {receipt.date}
-                    </SemiBoldText>
-                  </View>
-                  <Image
-                    source={require('../../assets/img/receiptCheckIcon.png')}
-                    style={styles.receiptCheck}
-                  />
-                </TouchableOpacity>
-              ))}
-
               <TouchableOpacity
                 style={styles.moreButton}
                 onPress={() =>
                   navigation.navigate('ReqReceiptList', {
-                    groupId,
-                    receiptList,
-                    requestCount,
+                    groupId: teamId,
                   })
                 }
               >

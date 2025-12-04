@@ -53,11 +53,13 @@ const RequestAccept = ({navigation}) => {
 
             const payload = {
                 s3Key,
-                transactionDate: formattedDate || dayjs().format("YYYY-MM-DD"),
-                storeName: receipt.place || receipt.storeName || "가맹점",
-                amount: Number(receipt.amount) || 0,
-                categoryId: receipt.categoryId || 1,
-                memo: desc || receipt.desc || "",
+                description:
+                    desc ||
+                    receipt.desc ||
+                    receipt.memo ||
+                    receipt.storeName ||
+                    receipt.place ||
+                    "",
             };
 
             await receiptService.createReceipt(teamId, payload);

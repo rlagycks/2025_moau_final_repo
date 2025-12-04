@@ -27,26 +27,56 @@ const GroupAccountDetail = ({navigation}) => {
     }
 
     useEffect(() => {
-        const fetchData = async () => {
-            if (!groupId) return;
-            try {
-                setLoading(true);
-                const [account, txs, receiptList] = await Promise.all([
-                    bankingService.getAccountInfo(groupId),
-                    bankingService.getTransactions(groupId),
-                    receiptService.getReceipts(groupId),
-                ]);
+                const fetchData = async () => {
+                    if (!groupId) return;
+                    try {
+                        setLoading(true);
+                        const [account, txs, receiptList] = await Promise.all([
+                            bankingService.getBalance(groupId),
+                            bankingService.getTransactions(groupId),
+                            receiptService.getReceipts(groupId),
+                        ]);
 
-                setAccountInfo(account);
-                setTransactions(Array.isArray(txs) ? txs : txs?.content || []);
+                setAccountInfo(
+                    account?.balanceCents !== undefined
+                        ? {
+                              accountNumber: account?.alias || '계좌',
+                              balance: account?.balanceCents / 100,
+                          }
+                        : account,
+                );
+                const txList = Array.isArray(txs) ? txs : txs?.content || [];
+                const mappedTx = txList.map(t => ({
+                    id: t.bankTransactionId || t.id,
+                    description: t.description,
+                    amount: (t.amountCents ?? t.amount ?? 0) / 100,
+                    balance: (t.balanceCents ?? t.balance ?? 0) / 100,
+                    transactionDate: t.txnDate || t.transactionDate || t.date,
+                }));
+                setTransactions(mappedTx);
 
                 const receiptArray = Array.isArray(receiptList?.content)
                     ? receiptList.content
                     : Array.isArray(receiptList)
                     ? receiptList
                     : [];
-                const approved = receiptArray.filter(r => {
-                    const status = r.status || r.reviewStatus || r.state;
+                const normalized = receiptArray.map(r => ({
+                    ...r,
+                    id: r.receiptId || r.id,
+                    receiptId: r.receiptId || r.id,
+                    reviewId: r.reviewId,
+                    imageUrl: r.receiptImageUrl || r.imageUrl,
+                    author:
+                        r.requesterName ||
+                        r.author ||
+                        r.authorName ||
+                        r.uploaderName,
+                    description: r.description || r.memo || r.desc || r.storeName,
+                    transactionDate: r.transactionDate || r.date,
+                    status: r.status || r.reviewStatus || r.state,
+                }));
+                const approved = normalized.filter(r => {
+                    const status = r.status;
                     return status === "APPROVE" || status === "APPROVED" || status === "승인";
                 });
                 setReceipts(approved);
@@ -176,12 +206,12 @@ const GroupAccountDetail = ({navigation}) => {
                                         ) : null}
 
                                         <View style={styles.authorCard}>
-                                            <SemiBoldText style={styles.authorName}>{receipt.author || receipt.authorName || receipt.uploaderName}</SemiBoldText>
-                                            <SemiBoldText style={styles.receiptDesc}>{receipt.memo || receipt.desc || receipt.storeName}</SemiBoldText>
-                                            <RegularText style={styles.receiptDate}>{receipt.transactionDate || receipt.date}</RegularText>
+                                            <SemiBoldText style={styles.authorName}>{receipt.author}</SemiBoldText>
+                                            <SemiBoldText style={styles.receiptDesc}>{receipt.description}</SemiBoldText>
+                                            <RegularText style={styles.receiptDate}>{receipt.transactionDate}</RegularText>
                                         </View>
-                                        <SemiBoldText style={[styles.stateText, {color: getStateColor(receipt.status || receipt.reviewStatus || receipt.state)}]}>
-                                            {receipt.status || receipt.reviewStatus || receipt.state}
+                                        <SemiBoldText style={[styles.stateText, {color: getStateColor(receipt.status)}]}>
+                                            {receipt.status}
                                         </SemiBoldText>
                                     </TouchableOpacity>
                                 ))}

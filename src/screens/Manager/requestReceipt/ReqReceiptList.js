@@ -24,11 +24,21 @@ const ReqReceiptList = ({navigation, route}) => {
           : Array.isArray(data)
           ? data
           : [];
-        const waiting = list.filter(
+        const normalized = list.map(r => ({
+          ...r,
+          id: r.receiptId || r.id,
+          receiptId: r.receiptId || r.id,
+          reviewId: r.reviewId,
+          imageUrl: r.receiptImageUrl || r.imageUrl,
+          author: r.requesterName || r.author || r.authorName || r.uploaderName,
+          description: r.description || r.memo || r.desc || r.storeName,
+          transactionDate: r.transactionDate || r.date,
+          status: r.status || r.reviewStatus || r.state,
+        }));
+        const waiting = normalized.filter(
           r =>
             r.status === 'WAITING' ||
-            r.reviewStatus === 'WAITING' ||
-            r.state === 'WAITING' ||
+            r.status === 'PENDING' ||
             !r.status,
         );
         setReceipts(waiting);
@@ -74,6 +84,7 @@ const ReqReceiptList = ({navigation, route}) => {
                 navigation.navigate("ReqReceiptDetail", {
                   teamId,
                   receiptId: receipt.receiptId || receipt.id,
+                  reviewId: receipt.reviewId,
                 })
               }
             >
@@ -83,13 +94,13 @@ const ReqReceiptList = ({navigation, route}) => {
 
               <View style={styles.authorCard}>
                 <SemiBoldText style={styles.authorName}>
-                  {receipt.author || receipt.authorName || receipt.uploaderName}
+                  {receipt.author}
                 </SemiBoldText>
                 <SemiBoldText style={styles.receiptDesc}>
-                  {receipt.memo || receipt.desc || receipt.storeName}
+                  {receipt.description}
                 </SemiBoldText>
                 <SemiBoldText style={styles.receiptDate}>
-                  {receipt.transactionDate || receipt.date}
+                  {receipt.transactionDate}
                 </SemiBoldText>
               </View>
 

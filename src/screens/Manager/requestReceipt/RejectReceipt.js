@@ -6,7 +6,7 @@ import SemiBoldText from '../../../components/customText/SemiBoldText';
 import * as receiptService from '../../../services/receiptService';
 
 const RejectReceipt = ({navigation, route}) => {
-    const { teamId, receiptId } = route.params;
+    const { teamId, receiptId, reviewId } = route.params;
     const [rejectReason, setRejectReason] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -17,7 +17,7 @@ const RejectReceipt = ({navigation, route}) => {
       }
       try {
         setLoading(true);
-        await receiptService.rejectReceipt(teamId, receiptId, rejectReason.trim());
+        await receiptService.rejectReceipt(teamId, reviewId, rejectReason.trim());
         Alert.alert('완료', '거절되었습니다.', [
           { text: '확인', onPress: () => navigation.goBack() },
         ]);

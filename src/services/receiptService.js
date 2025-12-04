@@ -60,7 +60,21 @@ export const uploadImageToS3 = async (teamId, fileUri) => {
 
 export const createReceipt = async (teamId, payload) => {
   try {
-    const res = await api.post(`/teams/${teamId}/accounting/receipts`, payload);
+    const body = {
+      s3Key:
+        payload?.s3Key ||
+        payload?.s3_key ||
+        payload?.key ||
+        payload?.s3key,
+      description:
+        payload?.description ||
+        payload?.memo ||
+        payload?.desc ||
+        payload?.storeName ||
+        '',
+    };
+
+    const res = await api.post(`/teams/${teamId}/accounting/receipts`, body);
     return unwrap(res);
   } catch (err) {
     console.error('영수증 생성 실패:', err);
@@ -70,7 +84,7 @@ export const createReceipt = async (teamId, payload) => {
 
 export const getReceipts = async teamId => {
   try {
-    const res = await api.get(`/teams/${teamId}/accounting/receipts`);
+    const res = await api.get(`/teams/${teamId}/accounting/reviews/receipts`);
     return unwrap(res);
   } catch (err) {
     console.error('영수증 목록 조회 실패:', err);
@@ -80,7 +94,9 @@ export const getReceipts = async teamId => {
 
 export const getReceiptDetail = async (teamId, receiptId) => {
   try {
-    const res = await api.get(`/teams/${teamId}/accounting/receipts/${receiptId}`);
+    const res = await api.get(
+      `/teams/${teamId}/accounting/receipts/${receiptId}`,
+    );
     return unwrap(res);
   } catch (err) {
     console.error('영수증 상세 조회 실패:', err);
@@ -90,9 +106,22 @@ export const getReceiptDetail = async (teamId, receiptId) => {
 
 export const requestReview = async (teamId, receiptId, body) => {
   try {
+    const payload = {
+      amountCents: body?.amountCents ?? body?.amount ?? 0,
+      transactionDate:
+        body?.transactionDate ||
+        body?.transaction_date ||
+        body?.txnDate ||
+        body?.date,
+      merchantName:
+        body?.merchantName || body?.storeName || body?.place || '가맹점',
+      paymentMethod: body?.paymentMethod || 'UNKNOWN',
+      description: body?.description || body?.memo || body?.desc || '',
+    };
+
     const res = await api.post(
       `/teams/${teamId}/accounting/receipts/${receiptId}/request-review`,
-      body,
+      payload,
     );
     return unwrap(res);
   } catch (err) {
@@ -101,11 +130,16 @@ export const requestReview = async (teamId, receiptId, body) => {
   }
 };
 
-export const approveReceipt = async (teamId, receiptId, approveMemo) => {
+export const approveReceipt = async (teamId, reviewId, body) => {
   try {
     const res = await api.post(
-      `/teams/${teamId}/accounting/receipts/${receiptId}/reviews/approve`,
-      approveMemo ? { approveMemo } : {},
+      `/teams/${teamId}/accounting/reviews/receipts/${reviewId}/approve`,
+      {
+        bankAccountId: body?.bankAccountId,
+        categoryId: body?.categoryId,
+        description: body?.description,
+        transactionDate: body?.transactionDate,
+      },
     );
     return unwrap(res);
   } catch (err) {
@@ -114,11 +148,11 @@ export const approveReceipt = async (teamId, receiptId, approveMemo) => {
   }
 };
 
-export const rejectReceipt = async (teamId, receiptId, rejectReason) => {
+export const rejectReceipt = async (teamId, reviewId, rejectReason) => {
   try {
     const res = await api.post(
-      `/teams/${teamId}/accounting/receipts/${receiptId}/reviews/reject`,
-      { rejectReason },
+      `/teams/${teamId}/accounting/reviews/receipts/${reviewId}/reject`,
+      { reason: rejectReason },
     );
     return unwrap(res);
   } catch (err) {

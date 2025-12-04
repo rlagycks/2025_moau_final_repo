@@ -5,7 +5,6 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import ManagePageNavHeader from '../../../components/nav/ManagePageNavHeader';
 import { useRoute } from '@react-navigation/native';
 import * as noticeService from '../../../services/noticeService';
-import * as receiptService from '../../../services/receiptService';
 
 const NoticePost = ({navigation}) => {
   const route = useRoute();
@@ -82,10 +81,10 @@ const NoticePost = ({navigation}) => {
 
     try {
       setSubmitting(true);
-      let imageUrls = [];
+      let imageKeys = [];
       if (selectedImage.length > 0) {
-        imageUrls = await Promise.all(
-          selectedImage.map(uri => receiptService.uploadImageToS3(teamId, uri)),
+        imageKeys = await Promise.all(
+          selectedImage.map(uri => noticeService.uploadNoticeImage(teamId, uri)),
         );
       }
 
@@ -104,7 +103,7 @@ const NoticePost = ({navigation}) => {
       await noticeService.createNotice(teamId, {
         title: title.trim(),
         content: content.trim(),
-        images: imageUrls,
+        imageKeys,
         poll,
       });
 

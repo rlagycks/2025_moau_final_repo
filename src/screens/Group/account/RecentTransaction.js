@@ -18,7 +18,15 @@ const RecentTransaction = () => {
                 setLoading(true);
                 const txs = await bankingService.getTransactions(groupId);
                 const list = Array.isArray(txs?.content) ? txs.content : Array.isArray(txs) ? txs : [];
-                setTransactions(list);
+                const mapped = list.map(t => ({
+                    id: t.bankTransactionId || t.id,
+                    description: t.description,
+                    amount: (t.amountCents ?? t.amount ?? 0) / 100,
+                    balance: (t.balanceCents ?? t.balance ?? 0) / 100,
+                    transactionDate: t.txnDate || t.transactionDate || t.date,
+                    time: t.time,
+                }));
+                setTransactions(mapped);
             } catch (err) {
                 console.error("거래 내역 조회 실패:", err);
                 Alert.alert("오류", "거래 내역을 불러오지 못했습니다.");

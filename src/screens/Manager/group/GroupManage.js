@@ -76,7 +76,7 @@ const GroupManage = ({ route, navigation }) => {
         setLoading(true);
         const [data, account] = await Promise.all([
           getGroup(teamId),
-          bankingService.getAccountInfo(teamId),
+          bankingService.getBalance(teamId),
         ]);
         console.log('그룹 정보 조회 성공:', data);
 
@@ -84,7 +84,7 @@ const GroupManage = ({ route, navigation }) => {
         setAccountInfo(account);
         setEditName(data.name || groupName);
         setEditDesc(data.description || groupDescription);
-        setPayAccount(account?.accountNumber || account?.account_number || '');
+        setPayAccount(account?.alias || account?.accountNumber || '');
         setPayAmount(data.duesAmount?.toString() || '');
 
         // 회비 주기가 있으면 프론트엔드 형식으로 변환

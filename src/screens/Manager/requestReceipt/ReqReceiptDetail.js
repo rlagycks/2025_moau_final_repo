@@ -8,6 +8,7 @@ import * as receiptService from '../../../services/receiptService';
 const ReqReceiptDetail = ({navigation, route}) => {
     const teamId = route.params?.teamId;
     const receiptId = route.params?.receiptId;
+    const reviewId = route.params?.reviewId || detail?.reviewId;
     const [detail, setDetail] = useState(null);
     const [loading, setLoading] = useState(false);
 
@@ -29,8 +30,20 @@ const ReqReceiptDetail = ({navigation, route}) => {
     }, [teamId, receiptId]);
 
     const handleApprove = async () => {
+      if (!reviewId) {
+        Alert.alert('오류', 'reviewId가 없습니다.');
+        return;
+      }
       try {
-        await receiptService.approveReceipt(teamId, receiptId);
+        await receiptService.approveReceipt(teamId, reviewId, {
+          bankAccountId: detail?.bankAccountId,
+          categoryId: detail?.categoryId,
+          description: detail?.description || detail?.memo || detail?.desc,
+          transactionDate:
+            detail?.finalTransactionDate ||
+            detail?.transactionDate ||
+            detail?.date,
+        });
         Alert.alert('완료', '승인되었습니다.', [
           { text: '확인', onPress: () => navigation.goBack() },
         ]);
@@ -84,8 +97,8 @@ const ReqReceiptDetail = ({navigation, route}) => {
           </View>
 
           <View style={styles.rightColumn}>
-            <SemiBoldText style={styles.leftText}>{detail.storeName || detail.place}</SemiBoldText>
-            <SemiBoldText style={styles.amountText}>{(Number(detail.amount) || 0).toLocaleString()}원</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.merchantName || detail.storeName || detail.place}</SemiBoldText>
+            <SemiBoldText style={styles.amountText}>{(Number(detail.finalAmountCents ?? detail.amountCents ?? detail.amount ?? 0) / 100).toLocaleString()}원</SemiBoldText>
           </View>
         </View>
 
@@ -100,15 +113,15 @@ const ReqReceiptDetail = ({navigation, route}) => {
           </View>
 
           <View style={styles.rightColumn}>
-            <SemiBoldText style={styles.leftText}>{detail.transactionDate || detail.date}</SemiBoldText>
-            <SemiBoldText style={styles.leftText}>{detail.card}</SemiBoldText>
-            <SemiBoldText style={styles.leftText}>{detail.author || detail.authorName || detail.uploaderName}</SemiBoldText>
-            <SemiBoldText style={styles.leftText}>{detail.memo || detail.desc}</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.finalTransactionDate || detail.transactionDate || detail.date}</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.paymentMethod || detail.card}</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.requesterName || detail.author || detail.authorName || detail.uploaderName}</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.description || detail.memo || detail.desc}</SemiBoldText>
           </View>
         </View>
 
-        {detail.imageUrl && (
-          <Image source={{ uri: detail.imageUrl }} style={styles.receiptImage} />
+        {(detail.imageUrl || detail.receiptImageUrl) && (
+          <Image source={{ uri: detail.imageUrl || detail.receiptImageUrl }} style={styles.receiptImage} />
         )}
       </View>
 
@@ -120,6 +133,7 @@ const ReqReceiptDetail = ({navigation, route}) => {
             onPress={() => navigation.navigate("RejectReceipt", {
               teamId,
               receiptId,
+              reviewId,
             })}>
                 <BoldText style={styles.buttonText}>거절</BoldText>
             </TouchableOpacity>

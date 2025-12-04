@@ -73,13 +73,26 @@ const ReceiptDetail = ({navigation}) => {
     const stateConfig = getStateConfig(statusLabel);
 
     const handleReview = async action => {
-        if (!teamId || !receiptId) return;
+        if (!teamId || !detail?.reviewId) return;
         try {
             setLoading(true);
-            await receiptService.requestReview(teamId, receiptId, {
-                status: action === 'approve' ? 'APPROVE' : 'REJECT',
-                rejectReason: action === 'reject' ? rejectReason : undefined,
-            });
+            if (action === 'approve') {
+                await receiptService.approveReceipt(teamId, detail.reviewId, {
+                    bankAccountId: detail?.bankAccountId,
+                    categoryId: detail?.categoryId,
+                    description: detail?.description || detail?.memo || detail?.desc,
+                    transactionDate:
+                        detail?.finalTransactionDate ||
+                        detail?.transactionDate ||
+                        detail?.date,
+                });
+            } else {
+                await receiptService.rejectReceipt(
+                    teamId,
+                    detail.reviewId,
+                    rejectReason || '거절',
+                );
+            }
             const updated = await receiptService.getReceiptDetail(teamId, receiptId);
             setDetail(updated);
             Alert.alert("완료", action === 'approve' ? "승인되었습니다." : "거절되었습니다.");
@@ -134,8 +147,8 @@ const ReceiptDetail = ({navigation}) => {
                             </View>
 
                             <View style={styles.receiptInfoRight}>
-                                <SemiBoldText style={styles.leftText}>{detail.storeName || detail.place}</SemiBoldText>
-                                <SemiBoldText style={styles.amountText}>{(Number(detail.amount) || 0).toLocaleString()}원</SemiBoldText>
+                            <SemiBoldText style={styles.leftText}>{detail.merchantName || detail.storeName || detail.place}</SemiBoldText>
+                            <SemiBoldText style={styles.amountText}>{(Number(detail.finalAmountCents ?? detail.amountCents ?? detail.amount ?? 0) / 100).toLocaleString()}원</SemiBoldText>
                             </View>
                         </View>
 
@@ -149,21 +162,21 @@ const ReceiptDetail = ({navigation}) => {
                             </View>
 
                             <View style={styles.receiptInfoRight}>
-                                <SemiBoldText style={styles.leftText}>{detail.transactionDate || detail.date}</SemiBoldText>
-                                <SemiBoldText style={styles.leftText}>{detail.card}</SemiBoldText>
-                                <SemiBoldText style={styles.leftText}>{detail.author || detail.authorName || detail.uploaderName}</SemiBoldText>
+                                <SemiBoldText style={styles.leftText}>{detail.finalTransactionDate || detail.transactionDate || detail.date}</SemiBoldText>
+                                <SemiBoldText style={styles.leftText}>{detail.paymentMethod || detail.card}</SemiBoldText>
+                                <SemiBoldText style={styles.leftText}>{detail.requesterName || detail.author || detail.authorName || detail.uploaderName}</SemiBoldText>
                             </View>
                         </View>
 
                         <View style={styles.memoCard}>
-                            <RegularText style={styles.descText}>{detail.memo || detail.desc}</RegularText>
+                            <RegularText style={styles.descText}>{detail.description || detail.memo || detail.desc}</RegularText>
                         </View>
 
-                        {detail.imageUrl || detail.Postimage ? (
+                        {detail.imageUrl || detail.receiptImageUrl || detail.Postimage ? (
                             <Image
                                 source={
-                                    detail.imageUrl
-                                        ? { uri: detail.imageUrl }
+                                    detail.imageUrl || detail.receiptImageUrl
+                                        ? { uri: detail.imageUrl || detail.receiptImageUrl }
                                         : detail.Postimage
                                 }
                                 style={styles.receiptImage}

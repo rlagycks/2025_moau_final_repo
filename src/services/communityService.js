@@ -60,7 +60,7 @@ export const updatePost = async (teamId, postId, postData) => {
 export const createComment = async (teamId, postId, commentData) => {
   try {
     const res = await api.post(
-      `/teams/${teamId}/posts/${postId}/comments`,
+      `/posts/${postId}/comments`,
       commentData,
     );
     return res.data.data;
@@ -74,7 +74,7 @@ export const createComment = async (teamId, postId, commentData) => {
 export const deleteComment = async (teamId, postId, commentId) => {
   try {
     return await api.delete(
-      `/teams/${teamId}/posts/${postId}/comments/${commentId}`,
+      `/posts/${postId}/comments/${commentId}`,
     );
   } catch (err) {
     console.error('댓글 삭제 실패:', err);

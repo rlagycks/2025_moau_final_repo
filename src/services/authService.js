@@ -39,7 +39,7 @@ export const exchangeKakaoToken = async kakaoAccessToken => {
 // 토큰 재발급
 export const refreshAccessToken = async () => {
   try {
-    const { refreshToken } = useAuthStore.getState().refreshToken;
+    const refreshToken = useAuthStore.getState().refreshToken;
     if (!refreshToken) throw new Error('refreshToken 없음');
 
     const response = await api.post('/auth/refresh', {
@@ -67,7 +67,8 @@ export const refreshAccessToken = async () => {
 
 export const logoutApi = async () => {
   try {
-    const response = await api.post('/auth/logout');
+    const refreshToken = useAuthStore.getState().refreshToken;
+    const response = await api.post('/auth/logout', { refreshToken });
     return response.data;
   } catch (err) {
     console.error('로그아웃 API 호출 실패:', err);
@@ -81,6 +82,26 @@ export const getMyProfile = async () => {
     return response.data;
   } catch (err) {
     console.error('내 정보 조회 실패: ', err);
+    throw err;
+  }
+};
+
+export const updateMyProfile = async body => {
+  try {
+    const response = await api.patch('/users/me', body);
+    return response.data;
+  } catch (err) {
+    console.error('내 정보 수정 실패: ', err);
+    throw err;
+  }
+};
+
+export const deleteMyAccount = async () => {
+  try {
+    const response = await api.delete('/users/me');
+    return response.data;
+  } catch (err) {
+    console.error('회원 탈퇴 실패: ', err);
     throw err;
   }
 };

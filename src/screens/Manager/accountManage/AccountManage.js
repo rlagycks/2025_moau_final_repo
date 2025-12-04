@@ -34,6 +34,7 @@ const AccountManage = ({ navigation }) => {
     const [duesInfo, setDuesInfo] = useState(null);
     const [loading, setLoading] = useState(false);
     const [hasCycle, setHasCycle] = useState(true);
+    const [cycleId, setCycleId] = useState(null);
 
     const historyData = useMemo(() => generateRecentMonths(6), []);
 
@@ -41,29 +42,38 @@ const AccountManage = ({ navigation }) => {
       if (!groupId) return;
       try {
         setLoading(true);
-        const data = await duesService.getDuesStatus(groupId, year, month);
-        if (!data || data.duesAmount === undefined) {
+        const targetDate = dayjs(`${year}-${month}-01`).format('YYYY-MM-DD');
+        const data = await duesService.getDuesStatus(groupId, targetDate);
+        if (!data || data.cycleId === undefined) {
           setHasCycle(false);
           setMemberState([]);
           setDuesInfo(null);
+          setCycleId(null);
           return;
         }
         setHasCycle(true);
+        setCycleId(data.cycleId);
         setDuesInfo({
-          currentCycle: data.currentCycle,
-          duesAmount: data.duesAmount,
-          totalMembers: data.totalMembers,
+          currentCycle: data.cycleName,
+          duesAmount: data.totalExpectedAmount,
+          totalMembers: data.totalMemberCount,
           paidCount: data.paidCount,
         });
-        setMemberState(
-          (data.members || []).map(m => ({
-            id: m.userId ?? m.id,
-            name: m.nickname || m.name,
-            status: m.status,
-            paid: statusToPaid(m.status),
-            joinDate: m.joinDate || '',
-          })),
-        );
+        const paidMembers = (data.paidMembers || []).map(m => ({
+          id: m.userId ?? m.id,
+          name: m.nickname || m.name,
+          status: 'PAID',
+          paid: true,
+          joinDate: m.joinDate || '',
+        }));
+        const unpaidMembers = (data.unpaidMembers || []).map(m => ({
+          id: m.userId ?? m.id,
+          name: m.nickname || m.name,
+          status: 'UNPAID',
+          paid: false,
+          joinDate: m.joinDate || '',
+        }));
+        setMemberState([...unpaidMembers, ...paidMembers]);
       } catch (err) {
         console.error('회비 현황 조회 실패:', err);
         Alert.alert('오류', '회비 현황을 불러오지 못했습니다.');
@@ -79,14 +89,17 @@ const AccountManage = ({ navigation }) => {
     // 납부/미납부
     const togglePaid = async (member) => {
       if (!groupId) return;
+      if (!cycleId) return;
       const nextPaid = !member.paid;
       try {
-        await duesService.updateDuesStatus(groupId, {
-          targetUserId: member.id,
-          year: currentYear,
-          month: currentMonth,
-          status: nextPaid ? 'PAID' : 'UNPAID',
-        });
+        await duesService.updateDuesStatus(
+          groupId,
+          cycleId,
+          member.id,
+          nextPaid ? 'PAID' : 'UNPAID',
+          member.bankAccountId,
+          member.categoryId,
+        );
         setMemberState(prev =>
           prev.map(m => (m.id === member.id ? { ...m, paid: nextPaid, status: nextPaid ? 'PAID' : 'UNPAID' } : m)),
         );

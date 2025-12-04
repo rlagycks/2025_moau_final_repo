@@ -22,7 +22,22 @@ const ReceiptList = ({navigation, route}) => {
                 : Array.isArray(data)
                 ? data
                 : [];
-            setReceipts(list);
+            const normalized = list.map(item => ({
+                ...item,
+                id: item.receiptId || item.id,
+                receiptId: item.receiptId || item.id,
+                reviewId: item.reviewId,
+                imageUrl: item.receiptImageUrl || item.imageUrl,
+                author:
+                    item.requesterName ||
+                    item.author ||
+                    item.authorName ||
+                    item.uploaderName,
+                description: item.description || item.memo || item.desc,
+                transactionDate: item.transactionDate || item.date,
+                status: item.status || item.reviewStatus || item.state,
+            }));
+            setReceipts(normalized);
         } catch (err) {
             console.error("영수증 목록 조회 실패:", err);
             setReceipts([]);
@@ -88,9 +103,9 @@ const ReceiptList = ({navigation, route}) => {
                                         <Image source={{ uri: receipt.imageUrl }} style={styles.receiptImage} />
                                     ) : null}
                                     <View style={styles.authorCard}>
-                                        <SemiBoldText style={styles.authorName}>{receipt.author || receipt.authorName || receipt.uploaderName}</SemiBoldText>
-                                        <SemiBoldText style={styles.receiptDesc}>{receipt.memo || receipt.desc || receipt.storeName}</SemiBoldText>
-                                        <SemiBoldText style={styles.receiptDate}>{receipt.transactionDate || receipt.date}</SemiBoldText>
+                                        <SemiBoldText style={styles.authorName}>{receipt.author}</SemiBoldText>
+                                        <SemiBoldText style={styles.receiptDesc}>{receipt.description || receipt.storeName}</SemiBoldText>
+                                        <SemiBoldText style={styles.receiptDate}>{receipt.transactionDate}</SemiBoldText>
                                     </View>
                                 </TouchableOpacity>
                             ))

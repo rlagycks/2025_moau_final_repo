@@ -5,6 +5,8 @@ export const createGroup = async data => {
     const payload = {
       name: data.name,
       description: data.description || '',
+      duesPeriod: data.duesPeriod || 'MONTHLY',
+      duesAmount: data.duesAmount !== undefined ? Number(data.duesAmount) : 0,
     };
 
     const response = await api.post('/teams', payload);
@@ -99,13 +101,37 @@ export const kickMember = async (teamId, userId) => {
 
 export const updateMemberRole = async (teamId, userId, role) => {
   try {
-    const response = await api.put(`/teams/${teamId}/members/role`, {
-      targetUserId: userId,
-      role,
-    });
+    const response = await api.patch(
+      `/teams/${teamId}/owner/members/${userId}/role`,
+      {
+        role,
+      },
+    );
     return response.data;
   } catch (error) {
     console.error('멤버 권한 변경 실패:', error);
+    throw error;
+  }
+};
+
+export const transferOwner = async (teamId, newOwnerUserId) => {
+  try {
+    const response = await api.patch(`/teams/${teamId}/owner/transfer`, {
+      newOwnerUserId,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('팀장 위임 실패:', error);
+    throw error;
+  }
+};
+
+export const leaveTeam = async teamId => {
+  try {
+    const response = await api.post(`/teams/${teamId}/members/leave`);
+    return response.data;
+  } catch (error) {
+    console.error('팀 탈퇴 실패:', error);
     throw error;
   }
 };

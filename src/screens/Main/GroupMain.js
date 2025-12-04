@@ -65,13 +65,13 @@ const GroupMain = ({ route, navigation }) => {
           style={styles.scroll}
           contentContainerStyle={{ alignItems: 'center' }}
         >
-          <View style={styles.groupCard}>
+            <View style={styles.groupCard}>
             <View style={styles.calendarContainer}>
-              <CalendarView ref={calendarRef} initialMode="week" />
+              <CalendarView ref={calendarRef} initialMode="week" teamId={teamId} />
 
               <TouchableOpacity
                 style={styles.CalenderButton}
-                onPress={() => navigation.navigate('MonthCalendar')}
+                onPress={() => navigation.navigate('MonthCalendar', { teamId })}
               >
                 <RegularText style={styles.CalenderTextButton}>
                   {showMonthly ? '닫기' : '자세히'}

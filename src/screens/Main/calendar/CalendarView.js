@@ -1,5 +1,5 @@
-import React, {forwardRef, useState, useImperativeHandle} from "react";
-import { StyleSheet, View, TouchableOpacity, Modal, TextInput, FlatList, ScrollView, TouchableWithoutFeedback } from "react-native";
+import React, {forwardRef, useState, useImperativeHandle, useEffect, useCallback} from "react";
+import { StyleSheet, View, TouchableOpacity, Modal, TextInput, ScrollView, TouchableWithoutFeedback, Alert } from "react-native";
 import SemiBoldText from "../../../components/customText/SemiBoldText";
 import RegularText from "../../../components/customText/RegularText";
 import dayjs from 'dayjs';
@@ -9,6 +9,7 @@ import isBetween from 'dayjs/plugin/isBetween';
 import DateTimePicker from '@react-native-community/datetimepicker';
 // import axios from "axios";
 // import {API} from "../../config/config"
+import * as scheduleService from "../../../services/scheduleService";
 
 dayjs.extend(isoWeek);
 dayjs.extend(isBetween);
@@ -24,10 +25,11 @@ dayjs.extend(isBetween);
  * 
  */
 
-const CalendarView = forwardRef(({ initialMode = 'month', startDateOverride = null }, ref) => {
+const CalendarView = forwardRef(({ initialMode = 'month', startDateOverride = null, teamId = null }, ref) => {
     const [mode, setMode] = useState(initialMode); //현재 모드 month 또는 week
     const [currentDate, setCurrentDate] = useState(dayjs()); 
     const [events, setEvents] = useState([]); //저장된 일정들! id, title, start, end
+    const [, setLoadingSchedules] = useState(false);
 
     const [selectedDate, setSelectedDate] = useState(null); //사용자가 눌렀을 때 선택되는 날짜
 
@@ -47,6 +49,43 @@ const CalendarView = forwardRef(({ initialMode = 'month', startDateOverride = nu
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
 
+    const mapScheduleToEvent = schedule => {
+        if (!schedule) return null;
+
+        const start =
+            schedule.startsAt ??
+            schedule.start ??
+            schedule.startDate ??
+            schedule.startDay ??
+            schedule.date ??
+            schedule.from;
+
+        if (!start) return null;
+
+        const end =
+            schedule.endsAt ??
+            schedule.end ??
+            schedule.endDate ??
+            schedule.endDay ??
+            schedule.to ??
+            start;
+
+        return {
+            id: schedule.scheduleId ?? schedule.id ?? `${start}-${schedule.title ?? schedule.name ?? ''}`,
+            title: schedule.title ?? schedule.name ?? schedule.content ?? '일정',
+            start,
+            end: end || start,
+            location: schedule.location ?? schedule.place ?? null,
+            isAllDay: schedule.isAllDay ?? false,
+            startTime: schedule.startsAt ? dayjs(schedule.startsAt).format('HH:mm') : null,
+        };
+    };
+
+    const mapSchedulesToEvents = schedules =>
+        (Array.isArray(schedules) ? schedules : [])
+            .map(mapScheduleToEvent)
+            .filter(Boolean);
+
     //외부에서 호출 가능한 메서드!! 다른 페이지에서 가져다 쓰기 위함
     useImperativeHandle(ref, () => ({
         openMonthView: () => {
@@ -56,6 +95,42 @@ const CalendarView = forwardRef(({ initialMode = 'month', startDateOverride = nu
             if (m === 'month' || m === 'week') setMode(m);
         },
     }));
+
+    const loadSchedules = useCallback(async () => {
+        if (!teamId) return;
+
+        setLoadingSchedules(true);
+        try {
+            const year = currentDate.year();
+            const month = currentDate.month() + 1; // dayjs month is 0-based
+            const data = await scheduleService.getMonthlySchedules(teamId, year, month);
+            const rawList = Array.isArray(data?.content)
+                ? data.content
+                : Array.isArray(data?.schedules)
+                ? data.schedules
+                : Array.isArray(data)
+                ? data
+                : [];
+
+            const mapped = mapSchedulesToEvents(Array.isArray(rawList) ? rawList : []);
+            setEvents(mapped);
+        } catch (err) {
+            console.error('일정 조회 실패:', err);
+            setEvents([]);
+        } finally {
+            setLoadingSchedules(false);
+        }
+    }, [teamId, currentDate]);
+
+    useEffect(() => {
+        loadSchedules();
+    }, [loadSchedules]);
+
+    useEffect(() => {
+        if (startDateOverride) {
+            setCurrentDate(dayjs(startDateOverride));
+        }
+    }, [startDateOverride]);
 
     //날짜 계산
     const generateDates = () => {
@@ -107,47 +182,79 @@ const CalendarView = forwardRef(({ initialMode = 'month', startDateOverride = nu
     };
 
     //일정 추가
-    const addEvent = () => {
+    const addEvent = async () => {
         if (!newEventTitle.trim()) return;
+        if (!selectedDate) return;
 
-        let newEvent = null;
+        let start = null;
+        let end = null;
 
         if (eventType === 'day') {
-            newEvent = {
-                id: Date.now().toString(),
-                title: newEventTitle,
-                start: selectedDate.format('YYYY-MM-DD'),
-                end: selectedDate.format('YYYY-MM-DD'),
-                location: eventLocation || null,
-                startTime: eventStartTime ? eventStartTime.format("HH:mm") : null,
-            };
+            start = selectedDate;
+            end = selectedDate;
         } else if (eventType === 'range' && startDate && endDate) {
             //startDate와 endDate가 어느 쪽이 이전인지 검사하고,
             //사용자가 시작일보다 종료일을 앞선 날짜로 선택했을 경우, endDate를 startDate로, startDate를 endDate로 간주한다
-            const start = startDate.isBefore(endDate) ? startDate : endDate;
-            const end = startDate.isAfter(endDate) ? startDate : endDate;
-            newEvent = {
-                id: Date.now().toString(),
-                title: newEventTitle,
-                start: start.format('YYYY-MM-DD'),
-                end: end.format('YYYY-MM-DD'),
-                location: eventLocation || null,
-                startTime: eventStartTime ? eventStartTime.format("HH:mm") : null,
-            };
+            start = startDate.isBefore(endDate) ? startDate : endDate;
+            end = startDate.isAfter(endDate) ? startDate : endDate;
         }
 
-        if (newEvent) {
-            setEvents(prev => [...prev, newEvent]);
-        }
+        if (!start) return;
 
-        //입력 초기화 후 모달 닫기
-        setNewEventTitle('');
-        setEventLocation('');
-        setEventStartTime(null);
-        setStartDate(null);
-        setEndDate(null);
-        setEventType(null);
-        setModalVisible(false);
+        const hasTime = !!eventStartTime;
+
+        const startDateTime = hasTime
+            ? start
+                .hour(eventStartTime.hour())
+                .minute(eventStartTime.minute())
+                .second(eventStartTime.second())
+            : start.startOf('day');
+
+        const endDateTime = hasTime
+            ? (end || start)
+                .hour(eventStartTime.hour())
+                .minute(eventStartTime.minute())
+                .second(eventStartTime.second())
+            : (end || start).endOf('day');
+
+        const payload = {
+            title: newEventTitle.trim(),
+            description: '',
+            startsAt: startDateTime.toISOString(),
+            endsAt: endDateTime.toISOString(),
+            location: eventLocation || null,
+            isAllDay: !hasTime,
+        };
+
+        try {
+            if (teamId) {
+                await scheduleService.createSchedule(teamId, payload);
+                await loadSchedules();
+            } else {
+                const fallbackEvent = {
+                    id: Date.now().toString(),
+                    title: payload.title,
+                    start: payload.startsAt,
+                    end: payload.endsAt,
+                    location: payload.location,
+                    isAllDay: payload.isAllDay,
+                    startTime: hasTime ? eventStartTime.format("HH:mm") : null,
+                };
+                setEvents(prev => [...prev, fallbackEvent]);
+            }
+        } catch (err) {
+            console.error("일정 추가 실패:", err);
+            Alert.alert("오류", "일정 추가에 실패했습니다.");
+        } finally {
+            //입력 초기화 후 모달 닫기
+            setNewEventTitle('');
+            setEventLocation('');
+            setEventStartTime(null);
+            setStartDate(null);
+            setEndDate(null);
+            setEventType(null);
+            setModalVisible(false);
+        }
     };
 
     //시간 선택 처리
@@ -182,16 +289,29 @@ const CalendarView = forwardRef(({ initialMode = 'month', startDateOverride = nu
     }
 
     // 이벤트 삭제
-    const deleteEvent = (id) => {
-        setEvents(events.filter(e => e.id !== id));
-        setDetailModalVisible(false);
+    const deleteEvent = async (id) => {
+        if (!id) return;
+        try {
+            if (teamId) {
+                await scheduleService.deleteSchedule(id);
+                await loadSchedules();
+            } else {
+                setEvents(prev => prev.filter(e => e.id !== id));
+            }
+        } catch (err) {
+            console.error("일정 삭제 실패:", err);
+            Alert.alert("오류", "일정 삭제에 실패했습니다.");
+        } finally {
+            setDetailModalVisible(false);
+        }
     }
 
     // 특정 날짜에 해당하는 이벤트들을 반환 : 포함 범위는 start <= date <= end
     const getEventForDate = (date) => {
-        return events.filter(e => 
-            dayjs(date).isBetween(dayjs(e.start), dayjs(e.end), null, '[]')
-        );
+        return events.filter(e => {
+            if (!e.start || !e.end) return false;
+            return dayjs(date).isBetween(dayjs(e.start), dayjs(e.end), null, '[]');
+        });
     };
 
     // 렌더링 데이터 준비

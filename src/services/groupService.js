@@ -86,3 +86,26 @@ export const getGroupMembers = async teamId => {
     throw error;
   }
 };
+
+export const kickMember = async (teamId, userId) => {
+  try {
+    const response = await api.delete(`/teams/${teamId}/members/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('멤버 퇴출 실패:', error);
+    throw error;
+  }
+};
+
+export const updateMemberRole = async (teamId, userId, role) => {
+  try {
+    const response = await api.put(`/teams/${teamId}/members/role`, {
+      targetUserId: userId,
+      role,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('멤버 권한 변경 실패:', error);
+    throw error;
+  }
+};

@@ -2,8 +2,9 @@ import React, { useEffect, useRef } from "react";
 import { View, StyleSheet, ScrollView } from 'react-native';
 import CalendarView from "./CalendarView";
 
-const MonthCalendarView = () => {
+const MonthCalendarView = ({ route }) => {
     const calendarRef = useRef(null);
+    const teamId = route?.params?.teamId ?? null;
 
     useEffect(() => {
         calendarRef.current?.setModeExternally("month");
@@ -12,7 +13,7 @@ const MonthCalendarView = () => {
     return (
         <View style={styles.container}>
             <ScrollView>
-                <CalendarView ref={calendarRef} initialMode="month" />
+                <CalendarView ref={calendarRef} initialMode="month" teamId={teamId} />
             </ScrollView>
             
         </View>

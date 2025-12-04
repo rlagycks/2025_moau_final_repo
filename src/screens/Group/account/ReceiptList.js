@@ -1,23 +1,56 @@
-import React from "react";
-import { ScrollView, StyleSheet, TouchableOpacity, View, Image } from 'react-native';
-// import NavBar from "../../../components/nav/NavBar";
-import BoldText from "../../../components/customText/BoldText";
+import React, { useEffect, useMemo, useState } from "react";
+import { ScrollView, StyleSheet, TouchableOpacity, View, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import SemiBoldText from "../../../components/customText/SemiBoldText";
 import PageNavHeader from "../../../components/nav/PageNavHeader";
+import * as receiptService from "../../../services/receiptService";
 
 const ReceiptList = ({navigation, route}) => {
-    const {groupId, receipts} = route.params;
-    // const [currentGroupData, setCurrentGroupData] = useState(null);
+    const teamId = route.params?.groupId || route.params?.teamId;
+    const groupId = teamId;
+    const isAdmin = route.params?.isAdmin ?? false;
+    const [receipts, setReceipts] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
-    // useEffect(() => {
-    //     setCurrentGroupData(accountData[groupId])
-    // }, [groupId]);
+    const loadReceipts = async () => {
+        if (!teamId) return;
+        setLoading(true);
+        try {
+            const data = await receiptService.getReceipts(teamId);
+            const list = Array.isArray(data?.content)
+                ? data.content
+                : Array.isArray(data)
+                ? data
+                : [];
+            setReceipts(list);
+        } catch (err) {
+            console.error("영수증 목록 조회 실패:", err);
+            setReceipts([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    // if (!currentGroupData) return null;
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadReceipts();
+        setRefreshing(false);
+    };
 
-    const approveReceipts = receipts.filter(r => r.state === "승인");
-    const pendingReceipts = receipts.filter(r => r.state === "대기");
-    const rejectedReceipts = receipts.filter(r => r.state === "거절");
+    useEffect(() => {
+        loadReceipts();
+    }, [teamId]);
+
+    const mapState = status => {
+        const s = status || "";
+        if (s === "APPROVE" || s === "APPROVED") return "승인";
+        if (s === "REJECT" || s === "REJECTED") return "거절";
+        return "대기";
+    };
+
+    const approveReceipts = receipts.filter(r => mapState(r.status || r.state || r.reviewStatus) === "승인");
+    const pendingReceipts = receipts.filter(r => mapState(r.status || r.state || r.reviewStatus) === "대기");
+    const rejectedReceipts = receipts.filter(r => mapState(r.status || r.state || r.reviewStatus) === "거절");
 
     const getStateColor = (state) => {
         switch (state) {
@@ -35,24 +68,29 @@ const ReceiptList = ({navigation, route}) => {
 
     return (
         <View style={styles.container}>
-            <ScrollView>
+            <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
                 <PageNavHeader pageName="영수증 상세" navigation={navigation} groupId={groupId} />
 
+                {loading && (
+                    <ActivityIndicator style={{marginTop: 20}} color="#7242E2" />
+                )}
                 
                     <SemiBoldText style={[styles.sectionTitle, {color: getStateColor("승인")}]}>승인</SemiBoldText>
                     <View style={styles.receiptListCard}>
                         {approveReceipts.length > 0 ? (
                             approveReceipts.map(receipt => (
                                 <TouchableOpacity
-                                key={receipt.id}
+                                key={receipt.receiptId || receipt.id}
                                 style={styles.receiptCard}
-                                onPress={() => navigation.navigate("ReceiptDetail", {groupId, receipt})}
+                                onPress={() => navigation.navigate("ReceiptDetail", {groupId: teamId, teamId, receiptId: receipt.receiptId || receipt.id, receipt, isAdmin})}
                                 >
-                                    <Image source={receipt.Postimage} style={styles.receiptImage} />
+                                    {receipt.imageUrl ? (
+                                        <Image source={{ uri: receipt.imageUrl }} style={styles.receiptImage} />
+                                    ) : null}
                                     <View style={styles.authorCard}>
-                                        <SemiBoldText style={styles.authorName}>{receipt.author}</SemiBoldText>
-                                        <SemiBoldText style={styles.receiptDesc}>{receipt.desc}</SemiBoldText>
-                                        <SemiBoldText style={styles.receiptDate}>{receipt.date}</SemiBoldText>
+                                        <SemiBoldText style={styles.authorName}>{receipt.author || receipt.authorName || receipt.uploaderName}</SemiBoldText>
+                                        <SemiBoldText style={styles.receiptDesc}>{receipt.memo || receipt.desc || receipt.storeName}</SemiBoldText>
+                                        <SemiBoldText style={styles.receiptDate}>{receipt.transactionDate || receipt.date}</SemiBoldText>
                                     </View>
                                 </TouchableOpacity>
                             ))
@@ -66,15 +104,17 @@ const ReceiptList = ({navigation, route}) => {
                     <View style={styles.receiptListCard}>
                         {pendingReceipts.length > 0 ? (
                             pendingReceipts.map(receipt => (
-                                <TouchableOpacity key={receipt.id}
+                                <TouchableOpacity key={receipt.receiptId || receipt.id}
                                 style={styles.receiptCard}
-                                onPress={() => navigation.navigate("ReceiptDetail", {groupId, receipt})}
+                                onPress={() => navigation.navigate("ReceiptDetail", {groupId: teamId, teamId, receiptId: receipt.receiptId || receipt.id, receipt, isAdmin})}
                                 >
-                                    <Image source={receipt.Postimage} style={styles.receiptImage} />
+                                    {receipt.imageUrl ? (
+                                        <Image source={{ uri: receipt.imageUrl }} style={styles.receiptImage} />
+                                    ) : null}
                                     <View style={styles.authorCard}>
-                                        <SemiBoldText style={styles.authorName}>{receipt.author}</SemiBoldText>
-                                        <SemiBoldText style={styles.receiptDesc}>{receipt.desc}</SemiBoldText>
-                                        <SemiBoldText style={styles.receiptDate}>{receipt.date}</SemiBoldText>
+                                        <SemiBoldText style={styles.authorName}>{receipt.author || receipt.authorName || receipt.uploaderName}</SemiBoldText>
+                                        <SemiBoldText style={styles.receiptDesc}>{receipt.memo || receipt.desc || receipt.storeName}</SemiBoldText>
+                                        <SemiBoldText style={styles.receiptDate}>{receipt.transactionDate || receipt.date}</SemiBoldText>
                                     </View>
                                 </TouchableOpacity>
                             ))
@@ -89,15 +129,17 @@ const ReceiptList = ({navigation, route}) => {
                     <View style={styles.receiptListCard}>
                         {rejectedReceipts.length > 0 ? (
                         rejectedReceipts.map(receipt => (
-                            <TouchableOpacity key={receipt.id}
+                            <TouchableOpacity key={receipt.receiptId || receipt.id}
                             style={styles.receiptCard}
-                            onPress={() => navigation.navigate("ReceiptDetail", {groupId, receipt})}
+                            onPress={() => navigation.navigate("ReceiptDetail", {groupId: teamId, teamId, receiptId: receipt.receiptId || receipt.id, receipt, isAdmin})}
                             >
-                                <Image source={receipt.Postimage} style={styles.receiptImage} />
+                                {receipt.imageUrl ? (
+                                    <Image source={{ uri: receipt.imageUrl }} style={styles.receiptImage} />
+                                ) : null}
                                 <View style={styles.authorCard}>
-                                    <SemiBoldText style={styles.authorName}>{receipt.author}</SemiBoldText>
-                                    <SemiBoldText style={styles.receiptDesc}>{receipt.desc}</SemiBoldText>
-                                    <SemiBoldText style={styles.receiptDate}>{receipt.date}</SemiBoldText>
+                                    <SemiBoldText style={styles.authorName}>{receipt.author || receipt.authorName || receipt.uploaderName}</SemiBoldText>
+                                    <SemiBoldText style={styles.receiptDesc}>{receipt.memo || receipt.desc || receipt.storeName}</SemiBoldText>
+                                    <SemiBoldText style={styles.receiptDate}>{receipt.transactionDate || receipt.date}</SemiBoldText>
                                 </View>
                             </TouchableOpacity>
                         ))

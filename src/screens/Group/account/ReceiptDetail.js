@@ -1,5 +1,5 @@
-import React from "react";
-import { View, StyleSheet, Image, TouchableOpacity } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, StyleSheet, Image, TouchableOpacity, ActivityIndicator, Alert, TextInput } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import SemiBoldText from "../../../components/customText/SemiBoldText";
 import RegularText from "../../../components/customText/RegularText";
@@ -9,12 +9,33 @@ import acceptIcon from '../../../assets/img/acceptIcon.png';
 import standbyIcon from '../../../assets/img/standbyIcon.png';
 import refusalIcon from '../../../assets/img/refusalIcon.png';
 import BoldText from "../../../components/customText/BoldText";
+import * as receiptService from "../../../services/receiptService";
 
 
 const ReceiptDetail = ({navigation}) => {
     const route = useRoute();
-    const {receipt} = route.params;
-    const {group} = route.params;
+    const {receipt = {}, teamId, groupId, isAdmin = false} = route.params || {};
+    const [detail, setDetail] = useState(receipt);
+    const [loading, setLoading] = useState(false);
+    const [rejectReason, setRejectReason] = useState("");
+    const receiptId = receipt?.receiptId || receipt?.id || route.params?.receiptId;
+
+    useEffect(() => {
+        const fetchDetail = async () => {
+            if (!teamId || !receiptId) return;
+            setLoading(true);
+            try {
+                const data = await receiptService.getReceiptDetail(teamId, receiptId);
+                setDetail(data);
+            } catch (err) {
+                console.error("영수증 상세 조회 실패:", err);
+                Alert.alert("오류", "영수증 정보를 불러오지 못했습니다.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDetail();
+    }, [teamId, receiptId]);
 
     const getStateConfig = (state) => {
         switch (state) {
@@ -42,7 +63,33 @@ const ReceiptDetail = ({navigation}) => {
         }
     };
 
-    const stateConfig = getStateConfig(receipt.state);
+    const statusLabel = useMemo(() => {
+        const status = detail.status || detail.reviewStatus || detail.state;
+        if (status === "APPROVE" || status === "APPROVED") return "승인";
+        if (status === "REJECT" || status === "REJECTED") return "거절";
+        return "대기";
+    }, [detail]);
+
+    const stateConfig = getStateConfig(statusLabel);
+
+    const handleReview = async action => {
+        if (!teamId || !receiptId) return;
+        try {
+            setLoading(true);
+            await receiptService.requestReview(teamId, receiptId, {
+                status: action === 'approve' ? 'APPROVE' : 'REJECT',
+                rejectReason: action === 'reject' ? rejectReason : undefined,
+            });
+            const updated = await receiptService.getReceiptDetail(teamId, receiptId);
+            setDetail(updated);
+            Alert.alert("완료", action === 'approve' ? "승인되었습니다." : "거절되었습니다.");
+        } catch (err) {
+            console.error("검토 처리 실패:", err);
+            Alert.alert("오류", "처리에 실패했습니다.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <LinearGradient
@@ -51,6 +98,10 @@ const ReceiptDetail = ({navigation}) => {
             end={{x:0, y:0.97}}
             style={styles.gradientContainer}
         >
+
+            {loading && (
+                <ActivityIndicator style={{marginTop: 20}} color="#FFFFFF" />
+            )}
 
             <View style={styles.navContainer}>
                 <TouchableOpacity style={styles.backButton}
@@ -69,9 +120,9 @@ const ReceiptDetail = ({navigation}) => {
                         )}
 
                         <SemiBoldText style={styles.stateMessage}>{stateConfig.message}</SemiBoldText>
-                        {receipt.state === "거절" && (
+                        {statusLabel === "거절" && (
                             <RegularText style={styles.refusalReason}>
-                                {stateConfig.reason}
+                                {stateConfig.reason || detail.rejectReason}
                             </RegularText>
                         )}
                         <View style={styles.dashedLine} />
@@ -83,8 +134,8 @@ const ReceiptDetail = ({navigation}) => {
                             </View>
 
                             <View style={styles.receiptInfoRight}>
-                                <SemiBoldText style={styles.leftText}>{receipt.place}</SemiBoldText>
-                                <SemiBoldText style={styles.amountText}>{receipt.amount.toLocaleString()}원</SemiBoldText>
+                                <SemiBoldText style={styles.leftText}>{detail.storeName || detail.place}</SemiBoldText>
+                                <SemiBoldText style={styles.amountText}>{(Number(detail.amount) || 0).toLocaleString()}원</SemiBoldText>
                             </View>
                         </View>
 
@@ -98,16 +149,45 @@ const ReceiptDetail = ({navigation}) => {
                             </View>
 
                             <View style={styles.receiptInfoRight}>
-                                <SemiBoldText style={styles.leftText}>{receipt.date}</SemiBoldText>
-                                <SemiBoldText style={styles.leftText}>{receipt.card}</SemiBoldText>
-                                <SemiBoldText style={styles.leftText}>{receipt.author}</SemiBoldText>
+                                <SemiBoldText style={styles.leftText}>{detail.transactionDate || detail.date}</SemiBoldText>
+                                <SemiBoldText style={styles.leftText}>{detail.card}</SemiBoldText>
+                                <SemiBoldText style={styles.leftText}>{detail.author || detail.authorName || detail.uploaderName}</SemiBoldText>
                             </View>
                         </View>
 
                         <View style={styles.memoCard}>
-                            <RegularText style={styles.descText}>{receipt.desc}</RegularText>
+                            <RegularText style={styles.descText}>{detail.memo || detail.desc}</RegularText>
                         </View>
+
+                        {detail.imageUrl || detail.Postimage ? (
+                            <Image
+                                source={
+                                    detail.imageUrl
+                                        ? { uri: detail.imageUrl }
+                                        : detail.Postimage
+                                }
+                                style={styles.receiptImage}
+                            />
+                        ) : null}
                     </View>
+
+                    {isAdmin && (
+                        <View style={styles.adminActions}>
+                            <TouchableOpacity style={styles.adminButton} onPress={() => handleReview('approve')} disabled={loading}>
+                                <BoldText style={styles.adminButtonText}>승인</BoldText>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.adminButton} onPress={() => handleReview('reject')} disabled={loading}>
+                                <BoldText style={styles.adminButtonText}>거절</BoldText>
+                            </TouchableOpacity>
+                            <TextInput
+                                placeholder="거절 사유를 입력하세요"
+                                placeholderTextColor="#ADADAD"
+                                value={rejectReason}
+                                onChangeText={setRejectReason}
+                                style={styles.rejectInput}
+                            />
+                        </View>
+                    )}
                 </View>
         </LinearGradient>
     )
@@ -233,6 +313,41 @@ const styles = StyleSheet.create({
         color: "#FF0000",
         marginBottom: 20,
         fontSize: 14,
-    }
+    },
+    receiptImage: {
+        width: 240,
+        height: 180,
+        borderRadius: 12,
+        marginTop: 16,
+        borderWidth: 1,
+        borderColor: "#B5B2B2",
+    },
+    adminActions: {
+        marginTop: 16,
+        gap: 10,
+        width: "100%",
+        alignItems: "center",
+    },
+    adminButton: {
+        backgroundColor: "#7242E2",
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        width: 200,
+        alignItems: "center",
+    },
+    adminButtonText: {
+        color: "#FFFFFF",
+        fontSize: 18,
+    },
+    rejectInput: {
+        width: "90%",
+        borderWidth: 1,
+        borderColor: "#B5B2B2",
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        color: "#3E247C",
+    },
 
 })

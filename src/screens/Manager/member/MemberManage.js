@@ -1,41 +1,73 @@
-import { ScrollView, StyleSheet, TouchableOpacity, View, Modal, Image } from 'react-native'
-import React, { useState } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, Modal, Image, Alert } from 'react-native'
+import React, { useEffect, useState, useCallback } from 'react';
 import ManagePageNavHeader from '../../../components/nav/ManagePageNavHeader';
 import SemiBoldText from '../../../components/customText/SemiBoldText';
 import BoldText from '../../../components/customText/BoldText';
+import { getGroupMembers, kickMember, updateMemberRole } from '../../../services/groupService';
 
-const mockMembers = [
-    { id:1, name: "국태양", isAdmin: true },
-    { id:2, name: "고하늘", isAdmin: false },
-    { id:3, name: "김효찬", isAdmin: false },
-    { id:4, name: "임예준", isAdmin: true },
-    { id:5, name: "김종혁", isAdmin: true },
-    { id:6, name: "이승빈", isAdmin: true },
-    { id:7, name: "정기찬", isAdmin: false },
-  ];
+const MemberManage = ({navigation, route}) => {
+  const teamId = route?.params?.teamId;
 
-const MemberManage = ({navigation}) => {
-
-  const [members, setMembers] = useState(mockMembers);
+  const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
   const [selectedKickMember, setSelectedKickMember] = useState(null);
   const [kickModalVisible, setKickModalVisible] = useState(false);
 
+  const fetchMembers = useCallback(async () => {
+    if (!teamId) return;
+    try {
+      const data = await getGroupMembers(teamId);
+      const list = Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.content)
+        ? data.content
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      setMembers(
+        list.map(m => ({
+          id: m.userId ?? m.id,
+          name: m.nickname ?? m.name,
+          role: m.role,
+        })),
+      );
+    } catch (err) {
+      console.error('멤버 목록 불러오기 실패:', err);
+      Alert.alert('오류', '멤버 목록을 불러오지 못했습니다.');
+    }
+  }, [teamId]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
+
   const openPermissionModal = (member) => {
     setSelectedMember(member);
     setModalVisible(true);
   };
 
-  const changePermission = () => {
+  const isAdminRole = role => role === 'OWNER' || role === 'ADMIN';
+
+  const changePermission = async () => {
     if (!selectedMember) return;
 
-    const updated = members.map((m) => 
-    m.id === selectedMember.id ? {...m, isAdmin: !m.isAdmin} : m
-    );
-    setMembers(updated);
-    setModalVisible(false);
+    const nextRole = isAdminRole(selectedMember.role) ? 'MEMBER' : 'ADMIN';
+
+    try {
+      await updateMemberRole(teamId, selectedMember.id, nextRole);
+      setMembers(prev =>
+        prev.map(m =>
+          m.id === selectedMember.id ? { ...m, role: nextRole } : m,
+        ),
+      );
+      setModalVisible(false);
+    } catch (err) {
+      console.error('권한 변경 실패:', err);
+      Alert.alert('오류', '권한 변경에 실패했습니다.');
+    }
   };
 
   const openKickModal = (member) => {
@@ -43,12 +75,18 @@ const MemberManage = ({navigation}) => {
     setKickModalVisible(true);
   };
 
-  const kickMember = () => {
+  const kickMemberAction = async () => {
     if (!selectedKickMember) return;
 
-    const updated = members.filter((m) => m.id !== selectedKickMember.id);
-    setMembers(updated);
-    setKickModalVisible(false);
+    try {
+      await kickMember(teamId, selectedKickMember.id);
+      setMembers(prev => prev.filter(m => m.id !== selectedKickMember.id));
+    } catch (err) {
+      console.error('멤버 퇴출 실패:', err);
+      Alert.alert('오류', '멤버 퇴출에 실패했습니다.');
+    } finally {
+      setKickModalVisible(false);
+    }
   };
   
 
@@ -64,12 +102,14 @@ const MemberManage = ({navigation}) => {
         
 
         <ScrollView style={{marginTop: 20, paddingHorizontal: 25}}>
-          {members.map((member) => (
+          {members.map((member) => {
+            const isAdmin = isAdminRole(member.role);
+            return (
             <View key={member.id} style={styles.memberBox}>
               <View style={styles.memberNameSection}>
                 <SemiBoldText style={styles.memberName}>{member.name}</SemiBoldText>
 
-                {member.isAdmin && (
+                {isAdmin && (
                   <View style={styles.adminBadge}>
                     <SemiBoldText style={styles.adminBadgeText}>관리자</SemiBoldText>
                   </View>
@@ -88,7 +128,7 @@ const MemberManage = ({navigation}) => {
                 </TouchableOpacity>
               </View>
             </View>
-          ))}
+          )})}
         </ScrollView>
 
         <Modal visible={modalVisible} transparent animationType="fade">
@@ -117,7 +157,7 @@ const MemberManage = ({navigation}) => {
                       </SemiBoldText>
                       <View style={styles.currentPermissionBox}>
                         <SemiBoldText style={styles.subText}>
-                          {selectedMember.isAdmin ? "관리자" : "그룹원"}
+                          {isAdminRole(selectedMember.role) ? "관리자" : "그룹원"}
                         </SemiBoldText>
                       </View>
                     </View>
@@ -126,7 +166,7 @@ const MemberManage = ({navigation}) => {
                     <TouchableOpacity style={styles.permissionActionButton}
                     onPress={changePermission}>
                       <SemiBoldText style={styles.permissionActionButtonText}>
-                        {selectedMember.isAdmin ? "권한 박탈" : "권한 부여"}
+                        {isAdminRole(selectedMember.role) ? "권한 박탈" : "권한 부여"}
                       </SemiBoldText>
                     </TouchableOpacity>
                   </View>
@@ -150,7 +190,7 @@ const MemberManage = ({navigation}) => {
               )}
               
               <View style={styles.kickButtonRow}>
-                <TouchableOpacity style={styles.kickConfirmButton} onPress={kickMember}>
+                <TouchableOpacity style={styles.kickConfirmButton} onPress={kickMemberAction}>
                   <SemiBoldText style={styles.kickConfirmButtonText}>퇴출하기</SemiBoldText>
                 </TouchableOpacity>
 

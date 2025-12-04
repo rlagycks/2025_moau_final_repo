@@ -8,15 +8,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import SemiBoldText from '../../../components/customText/SemiBoldText';
 import BoldText from '../../../components/customText/BoldText';
 import dayjs from 'dayjs';
 import CommentInput from '../../../components/comment/CommentInput';
 import PageNavHeader from '../../../components/nav/PageNavHeader';
-import { useCommunityStore } from '../../../store/useCommunityStore';
 import {
+  getPostDetail,
   createComment,
   deletePost,
   updatePost,
@@ -86,23 +87,43 @@ const useAnonymousMapping = comments => {
 const PostDetail = ({ route, navigation }) => {
   const { teamId, postId } = route.params;
 
-  const { postDetail, fetchPostDetail } = useCommunityStore();
-  //   const [comments, setComments] = useState(post.comments || []);
+  const [postDetail, setPostDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [inputText, setInputText] = useState('');
   const [replyTarget, setReplyTarget] = useState(null);
-  const [isAnonymous, setIsAnonymous] = useState(true);
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
 
-  //   const comments = postDetail?.comments || [];
-  const flatComments = postDetail?.comments || [];
+  const comments = postDetail?.comments || [];
   const anonymousNameMap = useAnonymousMapping(comments);
 
-  useEffect(() => {
-    fetchPostDetail(teamId, postId);
+  const fetchDetail = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getPostDetail(teamId, postId);
+      setPostDetail(data);
+    } catch (err) {
+      console.error('게시글 상세 조회 실패:', err);
+      Alert.alert('오류', '게시글을 불러올 수 없습니다.');
+    } finally {
+      setLoading(false);
+    }
   }, [teamId, postId]);
+
+  useEffect(() => {
+    fetchDetail();
+  }, [fetchDetail]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#7242E2" />
+      </View>
+    );
+  }
 
   if (!postDetail) {
     return (
@@ -129,7 +150,7 @@ const PostDetail = ({ route, navigation }) => {
         content: editContent,
       });
 
-      await fetchPostDetail(teamId, postId);
+      await fetchDetail();
       setIsEditingPost(false);
     } catch (err) {
       console.error('게시글 수정 실패: ', err.response?.data);
@@ -142,13 +163,12 @@ const PostDetail = ({ route, navigation }) => {
 
     const body = {
       content: inputText.trim(),
-      isAnonymous,
       parentId: replyTarget ? replyTarget : null,
     };
 
     try {
       await createComment(teamId, postId, body);
-      await fetchPostDetail(teamId, postId);
+      await fetchDetail();
       setInputText('');
       setReplyTarget(null);
     } catch (err) {
@@ -318,35 +338,39 @@ const PostDetail = ({ route, navigation }) => {
           </View>
 
           <View style={styles.commentCard}>
-            {sortedComments.map(c => (
-              <View
-                key={c.commentId}
-                style={[
-                  styles.commentBox,
-                  c.parentId ? styles.replyBoxIndent : null,
-                ]}
-              >
-                <SemiBoldText style={styles.commentAuthor}>
-                  {c.isAnonymous
-                    ? anonymousNameMap[c.authorName] || '익명'
-                    : c.authorName}
-                </SemiBoldText>
-
-                <SemiBoldText style={styles.commentContent}>
-                  {c.content}
-                </SemiBoldText>
-
-                <SemiBoldText style={styles.commentDateText}>
-                  {dayjs(c.createdAt).format('YYYY-MM-DD HH:mm')}
-                </SemiBoldText>
-                <TouchableOpacity
-                  style={styles.replyButton}
-                  onPress={() => setReplyTarget(c.commentId)}
+            {sortedComments.map(c => {
+              const cid = c.commentId ?? c.id;
+              const parentId = c.parentId ?? c.parentCommentId ?? null;
+              return (
+                <View
+                  key={cid}
+                  style={[
+                    styles.commentBox,
+                    parentId ? styles.replyBoxIndent : null,
+                  ]}
                 >
-                  <SemiBoldText style={styles.buttonText}>답글</SemiBoldText>
-                </TouchableOpacity>
-              </View>
-            ))}
+                  <SemiBoldText style={styles.commentAuthor}>
+                    {c.isAnonymous
+                      ? anonymousNameMap[c.authorName] || '익명'
+                      : c.authorName}
+                  </SemiBoldText>
+
+                  <SemiBoldText style={styles.commentContent}>
+                    {c.content}
+                  </SemiBoldText>
+
+                  <SemiBoldText style={styles.commentDateText}>
+                    {dayjs(c.createdAt).format('YYYY-MM-DD HH:mm')}
+                  </SemiBoldText>
+                  <TouchableOpacity
+                    style={styles.replyButton}
+                    onPress={() => setReplyTarget(cid)}
+                  >
+                    <SemiBoldText style={styles.buttonText}>답글</SemiBoldText>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         </ScrollView>
 

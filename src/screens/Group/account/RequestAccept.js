@@ -1,21 +1,67 @@
-import React, { useState } from "react";
-import { View, StyleSheet, Image, TouchableOpacity, TextInput } from "react-native";
+import React, { useMemo, useState } from "react";
+import { View, StyleSheet, Image, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import SemiBoldText from "../../../components/customText/SemiBoldText";
 import RegularText from "../../../components/customText/RegularText";
 import LinearGradient from "react-native-linear-gradient";
-import acceptIcon from '../../../assets/img/acceptIcon.png';
-import standbyIcon from '../../../assets/img/standbyIcon.png';
-import refusalIcon from '../../../assets/img/refusalIcon.png';
 import BoldText from "../../../components/customText/BoldText";
+import dayjs from "dayjs";
+import * as receiptService from "../../../services/receiptService";
 
 
 const RequestAccept = ({navigation}) => {
     const route = useRoute();
-    const {receipt} = route.params;
-    const {group} = route.params;
+    const {receipt = {}, group} = route.params || {};
+    const teamId = group?.groupId || route.params?.teamId;
 
     const [desc, setDesc] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+
+    const formattedDate = useMemo(() => {
+        const date = receipt.date || receipt.transactionDate || receipt.createdAt;
+        if (!date) return '';
+        return dayjs(date).format("YYYY-MM-DD");
+    }, [receipt]);
+
+    const handleSubmit = async () => {
+        if (!teamId) {
+            Alert.alert("오류", "teamId가 없습니다.");
+            return;
+        }
+        if (!receipt.imageUri) {
+            Alert.alert("오류", "영수증 이미지가 없습니다.");
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+
+            const imageUrl = await receiptService.uploadImageToS3(teamId, receipt.imageUri);
+
+            const payload = {
+                imageUrl,
+                transactionDate: formattedDate || dayjs().format("YYYY-MM-DD"),
+                storeName: receipt.place || receipt.storeName || "가맹점",
+                amount: Number(receipt.amount) || 0,
+                categoryId: receipt.categoryId || 1,
+                memo: desc || receipt.desc || "",
+            };
+
+            await receiptService.createReceipt(teamId, payload);
+
+            Alert.alert("성공", "영수증을 등록했습니다.", [
+                {
+                    text: "확인",
+                    onPress: () => navigation.goBack(),
+                },
+            ]);
+        } catch (err) {
+            console.error("영수증 등록 실패:", err);
+            Alert.alert("오류", "영수증 등록에 실패했습니다.");
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     return (
         <LinearGradient
@@ -47,8 +93,8 @@ const RequestAccept = ({navigation}) => {
                         </View>
 
                         <View style={styles.receiptInfoRight}>
-                            <SemiBoldText style={styles.leftText}>{receipt.place}</SemiBoldText>
-                            <SemiBoldText style={styles.amountText}>{receipt.amount.toLocaleString()}원</SemiBoldText>
+                            <SemiBoldText style={styles.leftText}>{receipt.place || receipt.storeName || "가맹점"}</SemiBoldText>
+                            <SemiBoldText style={styles.amountText}>{(Number(receipt.amount) || 0).toLocaleString()}원</SemiBoldText>
                         </View>
                     </View>
 
@@ -62,7 +108,7 @@ const RequestAccept = ({navigation}) => {
                         </View>
 
                         <View style={styles.receiptInfoRight}>
-                            <SemiBoldText style={styles.leftText}>{receipt.date}</SemiBoldText>
+                            <SemiBoldText style={styles.leftText}>{formattedDate}</SemiBoldText>
                             <SemiBoldText style={styles.leftText}>{receipt.card}</SemiBoldText>
                             <SemiBoldText style={styles.leftText}>{receipt.author}</SemiBoldText>
                         </View>
@@ -78,8 +124,12 @@ const RequestAccept = ({navigation}) => {
             </View>
 
             
-            <TouchableOpacity style={styles.requestButton}>
-                <SemiBoldText style={styles.requestButtonText}>승인 요청하기</SemiBoldText>
+            <TouchableOpacity style={[styles.requestButton, submitting && {opacity: 0.6}]} disabled={submitting} onPress={handleSubmit}>
+                {submitting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                    <SemiBoldText style={styles.requestButtonText}>승인 요청하기</SemiBoldText>
+                )}
             </TouchableOpacity>
         </LinearGradient>
     )

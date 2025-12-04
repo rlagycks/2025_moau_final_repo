@@ -1,5 +1,5 @@
 import React, {useState, useEffect} from "react";
-import { View, Image, StyleSheet, ScrollView, TouchableOpacity, Text } from "react-native";
+import { View, Image, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import BoldText from "../../components/customText/BoldText";
 import LinearGradient from "react-native-linear-gradient";
@@ -7,167 +7,66 @@ import NavBar from "../../components/nav/NavBar";
 import SemiBoldText from "../../components/customText/SemiBoldText";
 import RegularText from "../../components/customText/RegularText";
 import { launchCamera } from "react-native-image-picker";
+import * as bankingService from "../../services/bankingService";
+import * as receiptService from "../../services/receiptService";
 
 const GroupAccountDetail = ({navigation}) => {
     const route = useRoute();
     const { groupId, groupName } = route.params;
 
-    const [accountData, setAccountData] = useState({
-        1: {
-            total: 378900,
-            recentTransactions: [
-                { id: 1, place: "메가커피 백석대점", amount: -12000, date: "2025-10-20 18:00:21", balance: 378900 },
-                { id: 2, place: "네이버스토어 스모어가든", amount: -35000, date: "2025-09-28 17:05:45", balance: 390900 },
-            ],
-            image: require("../../assets/groupImg/group1.png"),
-            accountNum: "3333-19-903-702",
-            ReceiptImage: [
-                {
-                    id: 1,
-                    Postimage: require("../../assets/receipts/roman_receipt1.jpg"),
-                    author: "고하늘",
-                    desc: "동아리원 다과비 지출",
-                    date: "2025.10.03 18:14:23",
-                    state: "승인",
-                    place: "메가커피 백석대점",
-                    amount: 35201,
-                    card: "신한카드(0526)"
-                },
-                {
-                    id: 2,
-                    Postimage: require("../../assets/receipts/roman_receipt2.png"),
-                    author: "하승현",
-                    desc: "플리마켓 원자재 구매",
-                    date: "2025.09.28 17:15:37",
-                    state: "대기",
-                    place: "네이버스토어 애완돌키우기",
-                    amount: 35201,
-                    card: "신한카드(0526)"
-                },
-                {
-                    id: 3,
-                    Postimage: require("../../assets/receipts/roman_receipt3.jpg"),
-                    author: "하승현",
-                    desc: "회비 사용",
-                    date: "2025.09.28 17:15:21",
-                    state: "거절",
-                    place: "쪼다(쪼림닭)",
-                    amount: 35201,
-                    card: "신한카드(0526)"
-                },
-            ]
-        },
-        2: {
-            total: 451900,
-            recentTransactions: [
-                {id: 1, place: "용우동 천안백석대점", amount: -20560, date: "2025-10-02 21:00", balance: 451900},
-                {id: 2, place: "CU 백석대점", amount: -50000, date: "2025-09-28 18:00", balance: 501900},
-            ],
-            image: require("../../assets/groupImg/group2.png"),
-            accountNum: "352-1306-5538-21",
-            ReceiptImage: [
-                {
-                    id: 1,
-                    Postimage: require("../../assets/receipts/goorm_receipt1.webp"),
-                    author: "김효찬",
-                    desc: "동아리원 다과비 지출",
-                    date: "2025.10.03 18:14:39",
-                    state: "승인",
-                    place: "메가커피 백석대점",
-                    amount: 35201,
-                    card: "신한카드(1231)"
-                },
-                {
-                    id: 2,
-                    Postimage: require("../../assets/receipts/goorm_receipt2.jpg"),
-                    author: "김종혁",
-                    desc: "플리마켓 원자재 구매",
-                    date: "2025.09.28 17:15:21",
-                    state: "거절",
-                    place: "네이버스토어 naked",
-                    amount: 35201,
-                    card: "신한카드(4095)"
-                },
-                {
-                    id: 3,
-                    Postimage: require("../../assets/receipts/goorm_receipt3.jpg"),
-                    author: "김종혁",
-                    desc: "플리마켓 원자재 구매",
-                    date: "2025.09.28 17:15:21",
-                    state: "거절",
-                    place: "쿠팡 타투스티커",
-                    amount: 35201,
-                    card: "카카오뱅크(1298)"
-                },
-            ]
-        },
-        3: {
-            total: 451900,
-            recentTransactions: [
-                {id: 1, place: "코스트코 천안성정점", amount: -85000, date: "2025-09-10 17:00", balance: 451900},
-                {id: 2, place: "에이바우트 천안신부점", amount: -45000, date: "2025-09-08 11:00", balance: 496900},
-            ],
-            image: require("../../assets/groupImg/group3.png"),
-            accountNum: "1000-552-9806732",
-            ReceiptImage: [
-                {
-                    id: 1,
-                    Postimage: require("../../assets/receipts/polaris_receipt1.jpg"),
-                    author: "임예준",
-                    desc: "동아리원 다과비 지출",
-                    date: "2025.10.03 18:14:39",
-                    state: "대기",
-                    place: "메가커피 백석대점",
-                    amount: 35201,
-                    card: "신한카드(0526)"
-                },
-                {
-                    id: 2,
-                    Postimage: require("../../assets/receipts/polaris_receipt2.jpg"),
-                    author: "국태양",
-                    desc: "플리마켓 원자재 구매",
-                    date: "2025.09.28 17:15:56",
-                    state: "대기",
-                    place: "네이버스토어 스모어가든",
-                    amount: 23567,
-                    card: "네이버페이",
-                    
-                },
-                {
-                    id: 3,
-                    Postimage: require("../../assets/receipts/polaris_receipt3.jpeg"),
-                    author: "국태양",
-                    desc: "회식비",
-                    date: "2025.09.28 17:15:56",
-                    state: "거절",
-                    place: "용우동 백석대점",
-                    amount: 32890,
-                    card: "KB카드(8324)"
-                },
-            ]
-        },
-    });
-
-    const [currentGroupData, setCurrentGroupData] = useState(null);
+    const [accountInfo, setAccountInfo] = useState(null);
+    const [transactions, setTransactions] = useState([]);
+    const [receipts, setReceipts] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     const getStateColor = (state) => {
-        switch (state) {
-            case "승인":
-                return "#00A93B";
-            case "대기":
-                return "#3197DA";
-            case "거절":
-                return "#D60000";
-            default:
-                return "#ADADAD";
-        }
+        const val = state || "";
+        if (val === "승인" || val === "APPROVE" || val === "APPROVED") return "#00A93B";
+        if (val === "거절" || val === "REJECT" || val === "REJECTED") return "#D60000";
+        return "#3197DA";
     }
 
     useEffect(() => {
-        setCurrentGroupData(accountData[groupId]);
-    }, [groupId, accountData]);
+        const fetchData = async () => {
+            if (!groupId) return;
+            try {
+                setLoading(true);
+                const [account, txs, receiptList] = await Promise.all([
+                    bankingService.getAccountInfo(groupId),
+                    bankingService.getTransactions(groupId),
+                    receiptService.getReceipts(groupId),
+                ]);
 
-        if (!currentGroupData) return null;
+                setAccountInfo(account);
+                setTransactions(Array.isArray(txs) ? txs : txs?.content || []);
+
+                const receiptArray = Array.isArray(receiptList?.content)
+                    ? receiptList.content
+                    : Array.isArray(receiptList)
+                    ? receiptList
+                    : [];
+                const approved = receiptArray.filter(r => {
+                    const status = r.status || r.reviewStatus || r.state;
+                    return status === "APPROVE" || status === "APPROVED" || status === "승인";
+                });
+                setReceipts(approved);
+            } catch (err) {
+                console.error("회계 데이터 조회 실패:", err);
+                Alert.alert("오류", "회계 정보를 불러오지 못했습니다.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [groupId]);
+
+        if (!accountInfo) {
+            return (
+                <View style={{flex: 1, justifyContent: "center", alignItems: "center"}}>
+                    <ActivityIndicator color="#7242E2" size="large" />
+                </View>
+            );
+        }
 
     const handleDirectPhoto = async () => {
         try {
@@ -223,9 +122,9 @@ const GroupAccountDetail = ({navigation}) => {
                         <ScrollView>
                             <NavBar />
                             <View style={styles.groupAccountContainer}>
-                                <Image source={currentGroupData.image} style={styles.groupImage} />
-                                <BoldText style={styles.accountNumText}>{currentGroupData.accountNum}</BoldText>
-                                <BoldText style={styles.totalAmountText}>{currentGroupData.total.toLocaleString()} 원</BoldText>
+                                <Image source={require("../../assets/img/accountingIcon.png")} style={styles.groupImage} />
+                                <BoldText style={styles.accountNumText}>{accountInfo.accountNumber}</BoldText>
+                                <BoldText style={styles.totalAmountText}>{(Number(accountInfo.balance) || 0).toLocaleString()} 원</BoldText>
                             </View>
                             
                             <View style={styles.divider} />
@@ -233,19 +132,19 @@ const GroupAccountDetail = ({navigation}) => {
                             <View style={styles.accountSection}>
                                 <SemiBoldText style={styles.latestAccountText}>최근 거래</SemiBoldText>
 
-                                {currentGroupData.recentTransactions.map((item) => (
+                                {transactions.slice(0, 5).map((item) => (
                                     <View key={item.id} style={styles.transactionCard}>
                                         <View style={styles.transactionLeft}>
-                                            <SemiBoldText style={styles.placeText}>{item.place}</SemiBoldText>
-                                            <SemiBoldText style={styles.dateText}>{item.date}</SemiBoldText>
+                                            <SemiBoldText style={styles.placeText}>{item.description || item.place}</SemiBoldText>
+                                            <SemiBoldText style={styles.dateText}>{item.transactionDate || item.date}</SemiBoldText>
                                         </View>
 
                                         <View style={styles.transactionRight}>
                                             <SemiBoldText style={styles.amountText}>
-                                                {Math.abs(item.amount).toLocaleString()}원
+                                                {Math.abs(Number(item.amount) || 0).toLocaleString()}원
                                             </SemiBoldText>
                                             <SemiBoldText style={styles.balanceText}>
-                                                잔액 {item.balance.toLocaleString()}원
+                                                잔액 {(Number(item.balance) || 0).toLocaleString()}원
                                             </SemiBoldText>
                                         </View>
                                     </View>
@@ -263,28 +162,32 @@ const GroupAccountDetail = ({navigation}) => {
 
                             <View style={styles.receiptSection}>
                                 <SemiBoldText style={styles.latestAccountText}>업로드된 영수증</SemiBoldText>
-                                {currentGroupData.ReceiptImage.map((receipt) => (
+                                {receipts.slice(0, 5).map((receipt) => (
                                     <TouchableOpacity
-                                    key={receipt.id}
+                                    key={receipt.receiptId || receipt.id}
                                     style={styles.receiptCard}
                                     onPress={() =>
-                                        navigation.navigate("ReceiptDetail", {groupId, receipt})
+                                        navigation.navigate("ReceiptDetail", {groupId, teamId: groupId, receiptId: receipt.receiptId || receipt.id, receipt})
                                     }
                                     >
-                                        <Image source={receipt.Postimage}
-                                        style={styles.receiptImage} />
+                                        {receipt.imageUrl ? (
+                                            <Image source={{ uri: receipt.imageUrl }}
+                                            style={styles.receiptImage} />
+                                        ) : null}
 
                                         <View style={styles.authorCard}>
-                                            <SemiBoldText style={styles.authorName}>{receipt.author}</SemiBoldText>
-                                            <SemiBoldText style={styles.receiptDesc}>{receipt.desc}</SemiBoldText>
-                                            <RegularText style={styles.receiptDate}>{receipt.date}</RegularText>
+                                            <SemiBoldText style={styles.authorName}>{receipt.author || receipt.authorName || receipt.uploaderName}</SemiBoldText>
+                                            <SemiBoldText style={styles.receiptDesc}>{receipt.memo || receipt.desc || receipt.storeName}</SemiBoldText>
+                                            <RegularText style={styles.receiptDate}>{receipt.transactionDate || receipt.date}</RegularText>
                                         </View>
-                                        <SemiBoldText style={[styles.stateText, {color: getStateColor(receipt.state)}]}>{receipt.state}</SemiBoldText>
+                                        <SemiBoldText style={[styles.stateText, {color: getStateColor(receipt.status || receipt.reviewStatus || receipt.state)}]}>
+                                            {receipt.status || receipt.reviewStatus || receipt.state}
+                                        </SemiBoldText>
                                     </TouchableOpacity>
                                 ))}
                                 <TouchableOpacity
                                     style={styles.detailButton}
-                                    onPress={()=> navigation.navigate("ReceiptList", {groupId, receipts: currentGroupData.ReceiptImage})}
+                                    onPress={()=> navigation.navigate("ReceiptList", {groupId, teamId: groupId})}
                                     >
                                         <RegularText style={styles.detailText}>
                                             자세히

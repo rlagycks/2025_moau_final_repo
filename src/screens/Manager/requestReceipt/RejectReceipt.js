@@ -1,12 +1,33 @@
-import { Image, StyleSheet, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { Image, StyleSheet, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native'
 import React, { useState } from 'react'
 import LinearGradient from 'react-native-linear-gradient'
 import BoldText from '../../../components/customText/BoldText';
 import SemiBoldText from '../../../components/customText/SemiBoldText';
+import * as receiptService from '../../../services/receiptService';
 
 const RejectReceipt = ({navigation, route}) => {
-    const { place, amount, date, card, author, desc } = route.params;
+    const { teamId, receiptId } = route.params;
     const [rejectReason, setRejectReason] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleReject = async () => {
+      if (!rejectReason.trim()) {
+        Alert.alert('알림', '거절 사유를 입력해 주세요.');
+        return;
+      }
+      try {
+        setLoading(true);
+        await receiptService.rejectReceipt(teamId, receiptId, rejectReason.trim());
+        Alert.alert('완료', '거절되었습니다.', [
+          { text: '확인', onPress: () => navigation.goBack() },
+        ]);
+      } catch (err) {
+        console.error('영수증 거절 실패:', err);
+        Alert.alert('오류', '거절 처리에 실패했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
   return (
     <LinearGradient
@@ -44,36 +65,6 @@ const RejectReceipt = ({navigation, route}) => {
                   <View style={styles.dashedLine} />
                 </View>
 
-                <View style={styles.rowSection}>
-                  <View style={styles.leftColumn}>
-                    <SemiBoldText style={styles.rightText}>가맹점</SemiBoldText>
-                    <SemiBoldText style={styles.rightText}>결제금액</SemiBoldText>
-                  </View>
-
-                  <View style={styles.rightColumn}>
-                    <SemiBoldText style={styles.leftText}>{place}</SemiBoldText>
-                    <SemiBoldText style={styles.amountText}>{amount.toLocaleString()}원</SemiBoldText>
-                  </View>
-                </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.rowSection}>
-                  <View style={styles.leftColumn}>
-                    <SemiBoldText style={styles.rightText}>결제일시</SemiBoldText>
-                    <SemiBoldText style={styles.rightText}>결제카드</SemiBoldText>
-                    <SemiBoldText style={styles.rightText}>게시자</SemiBoldText>
-                    <SemiBoldText style={styles.rightText}>메모</SemiBoldText>
-                  </View>
-
-                  <View style={styles.rightColumn}>
-                    <SemiBoldText style={styles.leftText}>{date}</SemiBoldText>
-                    <SemiBoldText style={styles.leftText}>{card}</SemiBoldText>
-                    <SemiBoldText style={styles.leftText}>{author}</SemiBoldText>
-                    <SemiBoldText style={styles.leftText}>{desc}</SemiBoldText>
-                  </View>
-                </View>
-
                 <View style={styles.memoCard}>
                   <TextInput style={styles.inputText}
                   placeholder='거절 사유를 작성해 주세요'
@@ -85,8 +76,12 @@ const RejectReceipt = ({navigation, route}) => {
               </View>
 
               <View style={styles.buttonBox}>
-                <TouchableOpacity style={styles.buttonStyle}>
-                  <BoldText style={styles.buttonText}>완료</BoldText>
+                <TouchableOpacity style={[styles.buttonStyle, loading && {opacity:0.6}]} onPress={handleReject} disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <BoldText style={styles.buttonText}>완료</BoldText>
+                  )}
                 </TouchableOpacity>
               </View>
         </ScrollView>

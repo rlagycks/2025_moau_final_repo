@@ -1,11 +1,52 @@
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native'
-import React from 'react'
+import { Image, StyleSheet, TouchableOpacity, View, ActivityIndicator, Alert, ScrollView } from 'react-native'
+import React, { useEffect, useState } from 'react'
 import LinearGradient from 'react-native-linear-gradient'
 import BoldText from '../../../components/customText/BoldText';
 import SemiBoldText from '../../../components/customText/SemiBoldText';
+import * as receiptService from '../../../services/receiptService';
 
 const ReqReceiptDetail = ({navigation, route}) => {
-    const { place, amount, date, card, author, desc } = route.params;
+    const teamId = route.params?.teamId;
+    const receiptId = route.params?.receiptId;
+    const [detail, setDetail] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+      const fetchDetail = async () => {
+        if (!teamId || !receiptId) return;
+        try {
+          setLoading(true);
+          const data = await receiptService.getReceiptDetail(teamId, receiptId);
+          setDetail(data);
+        } catch (err) {
+          console.error('영수증 상세 조회 실패:', err);
+          Alert.alert('오류', '영수증 정보를 불러올 수 없습니다.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchDetail();
+    }, [teamId, receiptId]);
+
+    const handleApprove = async () => {
+      try {
+        await receiptService.approveReceipt(teamId, receiptId);
+        Alert.alert('완료', '승인되었습니다.', [
+          { text: '확인', onPress: () => navigation.goBack() },
+        ]);
+      } catch (err) {
+        console.error('영수증 승인 실패:', err);
+        Alert.alert('오류', '승인에 실패했습니다.');
+      }
+    };
+
+    if (!detail) {
+      return (
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+          <ActivityIndicator color="#7242E2" size="large" />
+        </View>
+      );
+    }
 
   return (
     <LinearGradient
@@ -24,6 +65,7 @@ const ReqReceiptDetail = ({navigation, route}) => {
           <BoldText style={styles.pageName}>영수증 확인</BoldText> 
       </View>
 
+      <ScrollView contentContainerStyle={{ alignItems: 'center', paddingBottom: 40 }}>
       <View style={styles.container}>
 
         <View style={styles.centerSection}>
@@ -42,8 +84,8 @@ const ReqReceiptDetail = ({navigation, route}) => {
           </View>
 
           <View style={styles.rightColumn}>
-            <SemiBoldText style={styles.leftText}>{place}</SemiBoldText>
-            <SemiBoldText style={styles.amountText}>{amount.toLocaleString()}원</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.storeName || detail.place}</SemiBoldText>
+            <SemiBoldText style={styles.amountText}>{(Number(detail.amount) || 0).toLocaleString()}원</SemiBoldText>
           </View>
         </View>
 
@@ -58,31 +100,32 @@ const ReqReceiptDetail = ({navigation, route}) => {
           </View>
 
           <View style={styles.rightColumn}>
-            <SemiBoldText style={styles.leftText}>{date}</SemiBoldText>
-            <SemiBoldText style={styles.leftText}>{card}</SemiBoldText>
-            <SemiBoldText style={styles.leftText}>{author}</SemiBoldText>
-            <SemiBoldText style={styles.leftText}>{desc}</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.transactionDate || detail.date}</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.card}</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.author || detail.authorName || detail.uploaderName}</SemiBoldText>
+            <SemiBoldText style={styles.leftText}>{detail.memo || detail.desc}</SemiBoldText>
           </View>
         </View>
+
+        {detail.imageUrl && (
+          <Image source={{ uri: detail.imageUrl }} style={styles.receiptImage} />
+        )}
       </View>
 
       <View style={styles.buttonBox}>
-            <TouchableOpacity style={styles.buttonStyle}>
+            <TouchableOpacity style={styles.buttonStyle} onPress={handleApprove}>
                 <BoldText style={styles.buttonText}>승인</BoldText>
             </TouchableOpacity>
             <TouchableOpacity style={styles.buttonStyle}
             onPress={() => navigation.navigate("RejectReceipt", {
-              place: place,
-              amount: amount,
-              date: date,
-              card: card,
-              author: author,
-              desc: desc
+              teamId,
+              receiptId,
             })}>
                 <BoldText style={styles.buttonText}>거절</BoldText>
             </TouchableOpacity>
         </View>
 
+    </ScrollView>
     </LinearGradient>
   )
 }
@@ -191,6 +234,15 @@ const styles = StyleSheet.create({
     color: "#7242E2",
     fontSize: 14,
     marginBottom: 5,
+  },
+  receiptImage: {
+    width: 260,
+    height: 200,
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#B5B2B2',
+    alignSelf: 'center',
   },
 
   divider: {

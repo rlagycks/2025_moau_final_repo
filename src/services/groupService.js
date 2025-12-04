@@ -109,3 +109,37 @@ export const updateMemberRole = async (teamId, userId, role) => {
     throw error;
   }
 };
+
+export const getJoinRequests = async teamId => {
+  try {
+    const response = await api.get(`/teams/join-requests/${teamId}`);
+    return response.data;
+  } catch (error) {
+    console.error('가입 요청 목록 조회 실패:', error);
+    throw error;
+  }
+};
+
+export const approveJoinRequest = async (teamId, requestId) => {
+  try {
+    const response = await api.post(
+      `/teams/join-requests/${teamId}/${requestId}/approve`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error('가입 승인 실패:', error);
+    throw error;
+  }
+};
+
+export const rejectJoinRequest = async (teamId, requestId) => {
+  try {
+    const response = await api.post(
+      `/teams/join-requests/${teamId}/${requestId}/reject`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error('가입 거절 실패:', error);
+    throw error;
+  }
+};

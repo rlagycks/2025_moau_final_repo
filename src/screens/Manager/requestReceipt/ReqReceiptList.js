@@ -1,51 +1,95 @@
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import React from 'react'
+import { Image, ScrollView, StyleSheet, TouchableOpacity, View, ActivityIndicator, RefreshControl, Alert } from 'react-native'
+import React, { useEffect, useState } from 'react'
 import ManagePageNavHeader from '../../../components/nav/ManagePageNavHeader';
 import SemiBoldText from '../../../components/customText/SemiBoldText';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import * as receiptService from '../../../services/receiptService';
 
 const ReqReceiptList = ({navigation, route}) => {
-    const {
-        groupId,
-        receiptList,
-        requestCount,
-    } = route.params;
+    const nav = navigation;
+    const params = route.params || {};
+    const teamId = params.groupId || params.teamId;
+
+    const [receipts, setReceipts] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const loadReceipts = async () => {
+      if (!teamId) return;
+      try {
+        setLoading(true);
+        const data = await receiptService.getReceipts(teamId);
+        const list = Array.isArray(data?.content)
+          ? data.content
+          : Array.isArray(data)
+          ? data
+          : [];
+        const waiting = list.filter(
+          r =>
+            r.status === 'WAITING' ||
+            r.reviewStatus === 'WAITING' ||
+            r.state === 'WAITING' ||
+            !r.status,
+        );
+        setReceipts(waiting);
+      } catch (err) {
+        console.error('영수증 대기 목록 조회 실패:', err);
+        Alert.alert('오류', '영수증 목록을 불러오지 못했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const onRefresh = async () => {
+      setRefreshing(true);
+      await loadReceipts();
+      setRefreshing(false);
+    };
+
+    useEffect(() => {
+      loadReceipts();
+      const unsubscribe = nav.addListener('focus', loadReceipts);
+      return unsubscribe;
+    }, [teamId]);
 
   return (
     <View style={styles.container}>
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <ManagePageNavHeader pageName="영수증 확인" navigation={navigation} />
 
         <View style={styles.receiptSection}>
           <SemiBoldText style={styles.textSection}>
-            승인 요청된 영수증 {requestCount}
+            승인 요청된 영수증 {receipts.length}
           </SemiBoldText>
 
-          {receiptList.map((receipt) => (
+          {loading && (
+            <ActivityIndicator style={{marginVertical: 10}} color="#7242E2" />
+          )}
+
+          {receipts.map((receipt) => (
             <TouchableOpacity
-              key={receipt.id}
+              key={receipt.receiptId || receipt.id}
               style={styles.receiptCard}
               onPress={() =>
                 navigation.navigate("ReqReceiptDetail", {
-                  place: receipt.place,
-                  amount: receipt.amount,
-                  date: receipt.date,
-                  card: receipt.card,
-                  author: receipt.author,
-                  desc: receipt.desc,
+                  teamId,
+                  receiptId: receipt.receiptId || receipt.id,
                 })
               }
             >
-              <Image source={receipt.Postimage} style={styles.receiptImage} />
+              {receipt.imageUrl ? (
+                <Image source={{ uri: receipt.imageUrl }} style={styles.receiptImage} />
+              ) : null}
 
               <View style={styles.authorCard}>
                 <SemiBoldText style={styles.authorName}>
-                  {receipt.author}
+                  {receipt.author || receipt.authorName || receipt.uploaderName}
                 </SemiBoldText>
                 <SemiBoldText style={styles.receiptDesc}>
-                  {receipt.desc}
+                  {receipt.memo || receipt.desc || receipt.storeName}
                 </SemiBoldText>
                 <SemiBoldText style={styles.receiptDate}>
-                  {receipt.date}
+                  {receipt.transactionDate || receipt.date}
                 </SemiBoldText>
               </View>
 

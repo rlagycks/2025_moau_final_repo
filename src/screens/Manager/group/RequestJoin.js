@@ -1,24 +1,20 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import React, { useState } from 'react'
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native'
+import React, { useEffect, useState } from 'react'
 import ManagePageNavHeader from '../../../components/nav/ManagePageNavHeader'
 import SemiBoldText from '../../../components/customText/SemiBoldText'
-
-const mockMembers = [
-    { id:1, name: "국태양", date: "2025.06.03"},
-    { id:2, name: "고하늘", date: "2025.05.31"},
-    { id:3, name: "김효찬", date: "2025.05.31"},
-    { id:4, name: "임예준", date: "2025.05.31"},
-    { id:5, name: "김종혁", date: "2025.05.31"},
-    { id:7, name: "정기찬", date: "2025.05.30"},
-  ];
-
-  const adminNames = ["강전하", "김진태", "이승빈"];
+import { useRoute } from '@react-navigation/native'
+import {
+  getJoinRequests,
+  approveJoinRequest,
+  rejectJoinRequest,
+} from '../../../services/groupService';
 
 const RequestJoin = ({navigation}) => {
+  const route = useRoute();
+  const teamId = route.params?.teamId;
 
-  const [reqJoin, setReqJoin] = useState(
-    mockMembers.map(item => ({ ...item, approved: false, approvedBy: null }))
-  );
+  const [reqJoin, setReqJoin] = useState([]);
+  const [loading, setLoading] = useState(false);
 
 //   날짜별로 그룹화하기
   const groupedByDate = reqJoin.reduce((acc, cur) => {
@@ -27,19 +23,50 @@ const RequestJoin = ({navigation}) => {
     return acc;
   }, {});
 
-  const handleApprove = (id) => {
-    const randomAdmin = adminNames[Math.floor(Math.random() * adminNames.length)];
-
-    setReqJoin(prev => 
-        prev.map(item => 
-            item.id === id? {...item, approved: true, approvedBy: randomAdmin}
-            : item
-        )
-    );
+  const loadRequests = async () => {
+    if (!teamId) return;
+    try {
+      setLoading(true);
+      const list = await getJoinRequests(teamId);
+      const mapped = (list || []).map(item => ({
+        id: item.requestId ?? item.id,
+        name: item.nickname || item.name,
+        date: item.requestDate || item.date || item.createdAt,
+        userId: item.userId,
+      }));
+      setReqJoin(mapped);
+    } catch (err) {
+      console.error('가입 요청 불러오기 실패:', err);
+      Alert.alert('오류', '가입 요청을 불러올 수 없습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReject = (id) => {
-    setReqJoin(prev => prev.filter(item => item.id !== id));
+  useEffect(() => {
+    loadRequests();
+  }, [teamId]);
+
+  const handleApprove = async (id) => {
+    if (!teamId || !id) return;
+    try {
+      await approveJoinRequest(teamId, id);
+      setReqJoin(prev => prev.filter(item => item.id !== id));
+    } catch (err) {
+      console.error('가입 승인 실패:', err);
+      Alert.alert('오류', '가입 승인에 실패했습니다.');
+    }
+  };
+
+  const handleReject = async (id) => {
+    if (!teamId || !id) return;
+    try {
+      await rejectJoinRequest(teamId, id);
+      setReqJoin(prev => prev.filter(item => item.id !== id));
+    } catch (err) {
+      console.error('가입 거절 실패:', err);
+      Alert.alert('오류', '가입 거절에 실패했습니다.');
+    }
   };
 
   return (
@@ -51,6 +78,10 @@ const RequestJoin = ({navigation}) => {
           <SemiBoldText style={styles.recentReqJoin}>최근 승인 요청</SemiBoldText>
           <SemiBoldText style={styles.recentReqCount}>{reqJoin.length}</SemiBoldText>
         </View>
+
+        {loading && (
+          <ActivityIndicator style={{ marginTop: 20 }} color="#7242E2" />
+        )}
 
         <ScrollView style={{marginTop: 20}}>
             {Object.keys(groupedByDate).map(date => (

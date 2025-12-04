@@ -100,3 +100,29 @@ export const requestReview = async (teamId, receiptId, body) => {
     throw err;
   }
 };
+
+export const approveReceipt = async (teamId, receiptId, approveMemo) => {
+  try {
+    const res = await api.post(
+      `/teams/${teamId}/accounting/receipts/${receiptId}/reviews/approve`,
+      approveMemo ? { approveMemo } : {},
+    );
+    return unwrap(res);
+  } catch (err) {
+    console.error('영수증 승인 실패:', err);
+    throw err;
+  }
+};
+
+export const rejectReceipt = async (teamId, receiptId, rejectReason) => {
+  try {
+    const res = await api.post(
+      `/teams/${teamId}/accounting/receipts/${receiptId}/reviews/reject`,
+      { rejectReason },
+    );
+    return unwrap(res);
+  } catch (err) {
+    console.error('영수증 거절 실패:', err);
+    throw err;
+  }
+};

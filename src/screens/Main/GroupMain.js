@@ -12,12 +12,14 @@ import RegularText from '../../components/customText/RegularText';
 import NavBar from '../../components/nav/NavBar';
 import CalendarView from './calendar/CalendarView';
 import { getGroup } from '../../services/groupService';
+import * as noticeService from '../../services/noticeService';
 
 const GroupMain = ({ route, navigation }) => {
   const { teamId } = route.params;
 
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notices, setNotices] = useState([]);
   console.log('전달받은 teamId: ', teamId);
 
   const [showMonthly, setShowMonthly] = useState(false);
@@ -25,10 +27,22 @@ const GroupMain = ({ route, navigation }) => {
 
   const loadGroup = async () => {
     try {
-      const data = await getGroup(teamId);
-      setGroup(data);
+      const [groupRes, noticeRes] = await Promise.all([
+        getGroup(teamId),
+        noticeService.getNotices(teamId, 0, 5),
+      ]);
+      setGroup(groupRes);
+
+      const noticeList = Array.isArray(noticeRes?.content)
+        ? noticeRes.content
+        : Array.isArray(noticeRes?.notices)
+        ? noticeRes.notices
+        : Array.isArray(noticeRes)
+        ? noticeRes
+        : [];
+      setNotices(noticeList);
     } catch (error) {
-      console.log('그룹 상세 조회 실패: ', error);
+      console.log('그룹/공지 조회 실패: ', error);
     } finally {
       setLoading(false);
     }
@@ -88,7 +102,7 @@ const GroupMain = ({ route, navigation }) => {
               >
                 최근 공지
               </SemiBoldText>
-              {(!group?.notices || group.notices.length === 0) && (
+              {(!notices || notices.length === 0) && (
                 <View style={styles.noticeCard}>
                   <Image
                     source={require('../../assets/img/postIcon.png')}
@@ -101,14 +115,14 @@ const GroupMain = ({ route, navigation }) => {
                   </View>
                 </View>
               )}
-              {group?.notices?.slice(0, 2).map(notices => {
+              {notices?.slice(0, 2).map(item => {
                 const limitedContent =
-                  notices.content.length > 22
-                    ? notices.content.slice(0, 22) + '...'
-                    : notices.content;
+                  (item.content || '').length > 22
+                    ? item.content.slice(0, 22) + '...'
+                    : item.content || '';
 
                 return (
-                  <View key={notices.id} style={styles.noticeCard}>
+                  <View key={item.id || item.noticeId} style={styles.noticeCard}>
                     <Image
                       source={require('../../assets/img/postIcon.png')}
                       style={styles.IconStyle}
@@ -116,13 +130,13 @@ const GroupMain = ({ route, navigation }) => {
                     <View style={styles.noticeContainer}>
                       <View style={styles.groupContainer}>
                         <SemiBoldText style={styles.noticeTitle}>
-                          {notices.title}
+                          {item.title}
                         </SemiBoldText>
                         <RegularText style={styles.noticeContent}>
                           {limitedContent}
                         </RegularText>
                         <RegularText style={styles.noticeDate}>
-                          {notices.date}
+                          {item.createdAt || item.createdDate || item.date}
                         </RegularText>
                       </View>
                       <TouchableOpacity
@@ -130,7 +144,7 @@ const GroupMain = ({ route, navigation }) => {
                         onPress={() =>
                           navigation.navigate('GroupNoticeDetail', {
                             teamId: group.id,
-                            noticeId: notices.id,
+                            noticeId: item.id || item.noticeId,
                           })
                         }
                       >

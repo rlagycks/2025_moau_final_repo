@@ -16,6 +16,7 @@ import ManagePageNavHeader from '../../../components/nav/ManagePageNavHeader';
 import { getGroup, updateGroup } from '../../../services/groupService';
 import { useGroupStore } from '../../../store/useGroupStore';
 import { deleteGroup } from '../../../services/groupService';
+import * as bankingService from '../../../services/bankingService';
 
 const GroupManage = ({ route, navigation }) => {
   const params = route?.params || {};
@@ -32,7 +33,7 @@ const GroupManage = ({ route, navigation }) => {
 
   const [editName, setEditName] = useState(groupName);
   const [editDesc, setEditDesc] = useState(groupDescription);
-  // const [payAccount, setPayAccount] = useState('');
+  const [payAccount, setPayAccount] = useState('');
   const [payAmount, setPayAmount] = useState('');
 
   const [selectedCycle, setSelectedCycle] = useState('');
@@ -44,6 +45,7 @@ const GroupManage = ({ route, navigation }) => {
 
   const [loading, setLoading] = useState(false);
   const [groupData, setGroupData] = useState(null);
+  const [accountInfo, setAccountInfo] = useState(null);
 
   const feeCycles = ['분기', '매월', '3개월', '6개월', '12개월'];
 
@@ -72,13 +74,17 @@ const GroupManage = ({ route, navigation }) => {
 
       try {
         setLoading(true);
-        const data = await getGroup(teamId);
+        const [data, account] = await Promise.all([
+          getGroup(teamId),
+          bankingService.getAccountInfo(teamId),
+        ]);
         console.log('그룹 정보 조회 성공:', data);
 
         setGroupData(data);
+        setAccountInfo(account);
         setEditName(data.name || groupName);
         setEditDesc(data.description || groupDescription);
-        // setPayAccount(data.accountNumber || data.account_number || '');
+        setPayAccount(account?.accountNumber || account?.account_number || '');
         setPayAmount(data.duesAmount?.toString() || '');
 
         // 회비 주기가 있으면 프론트엔드 형식으로 변환
@@ -86,7 +92,7 @@ const GroupManage = ({ route, navigation }) => {
           setSelectedCycle(feeCycleReverseMap[data.duesPeriod] || '');
         }
       } catch (error) {
-        console.error('그룹 정보 조회 에러:', error);
+        console.error('그룹/계좌 정보 조회 에러:', error);
       } finally {
         setLoading(false);
       }
@@ -161,7 +167,7 @@ const GroupManage = ({ route, navigation }) => {
               </SemiBoldText>
             </View>
 
-            {/* <View style={styles.inputWrapper}>
+            <View style={styles.inputWrapper}>
               <SemiBoldText style={styles.inputLabel}>계좌번호</SemiBoldText>
               <TextInput
                 placeholder="그룹 계좌번호를 입력하세요"
@@ -170,7 +176,7 @@ const GroupManage = ({ route, navigation }) => {
                 onChangeText={setPayAccount}
                 style={styles.textInput}
               />
-            </View> */}
+            </View>
 
             <View style={styles.inputWrapper}>
               <SemiBoldText style={styles.inputLabel}>회비 금액</SemiBoldText>
@@ -261,7 +267,6 @@ const GroupManage = ({ route, navigation }) => {
                 try {
                   setLoading(true);
 
-                  // 수정할 데이터 준비
                   const updateData = {
                     name: editName.trim(),
                     description: editDesc.trim(),
@@ -271,27 +276,17 @@ const GroupManage = ({ route, navigation }) => {
                       : 'NONE',
                   };
 
-                  console.log('그룹 수정 요청: ', updateData);
+                  const accountPromise = payAccount
+                    ? bankingService.registerAccount(
+                        teamId,
+                        payAccount.trim(),
+                        accountInfo?.bankName || '은행',
+                      )
+                    : Promise.resolve();
 
-                  // 계좌번호가 있으면 추가
-                  // if (payAccount.trim()) {
-                  //   updateData.accountNumber = payAccount.trim();
-                  // }
-
-                  const result = await updateGroup(teamId, updateData);
-                  console.log('그룹 수정 성공: ', result);
+                  await Promise.all([updateGroup(teamId, updateData), accountPromise]);
 
                   await fetchGroups();
-
-                  // 회비 금액이 있으면 추가
-                  // if (payAmount.trim()) {
-                  //   updateData.feeAmount = parseInt(payAmount.trim(), 10);
-                  // }
-
-                  // 회비 주기가 선택되었으면 추가
-                  // if (selectedCycle) {
-                  //   updateData.feeCycle = feeCycleMap[selectedCycle];
-                  // }
 
                   Alert.alert('성공', '그룹 정보가 저장되었습니다.', [
                     {
@@ -300,9 +295,8 @@ const GroupManage = ({ route, navigation }) => {
                     },
                   ]);
                 } catch (error) {
-                  console.error('그룹 수정 에러:', error);
-                  console.error('에러 상세:', error.response?.data);
-                  Alert.alert('오류', '그룹 정보 수정에 실패했습니다.');
+                  console.error('그룹/계좌 수정 에러:', error);
+                  Alert.alert('오류', '그룹 정보 또는 계좌 저장에 실패했습니다.');
                 } finally {
                   setLoading(false);
                 }

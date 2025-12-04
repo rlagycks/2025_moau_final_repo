@@ -1,144 +1,134 @@
-import { FlatList, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import React, { useState } from 'react'
+import { FlatList, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native'
+import React, { useEffect, useMemo, useState } from 'react'
 import SemiBoldText from '../../../components/customText/SemiBoldText';
 import BoldText from '../../../components/customText/BoldText';
 import ManagePageNavHeader from '../../../components/nav/ManagePageNavHeader';
+import { useRoute } from '@react-navigation/native';
+import dayjs from 'dayjs';
+import * as duesService from '../../../services/duesService';
 
-const mockGroups = {
-    1: {
-    members: [
-      { id: '1', name: '김효찬', joinDate: '2025-06-01', paid: false },
-      { id: '2', name: '고하늘', joinDate: '2025-06-01', paid: false },
-      { id: '3', name: '임예준', joinDate: '2025-05-31', paid: false },
-      { id: '4', name: '국태양', joinDate: '2025-05-15', paid: false },
-      { id: '5', name: '김종혁', joinDate: '2025-05-15', paid: false },
-      { id: '6', name: '이승빈', joinDate: '2025-05-15', paid: false },
-    ],
-    selectedCycle: "3months",
-    currentPayDate: "2025년 12월",
-    payHistory: {
-      '3months': [
-        { period: '2025년 9월', unpaidCount: 1 },
-        { period: '2025년 6월', unpaidCount: 2 },
-        { period: '2025년 3월', unpaidCount: 5 },
-        { period: '2024년 12월', unpaidCount: 2 },
-      ],
-    },
-  },
-  2: {
-    members: [
-      { id: '1', name: '국태양', joinDate: '2025-06-01', paid: false },
-      { id: '2', name: '임예준', joinDate: '2025-06-01', paid: false },
-      { id: '3', name: '이수빈', joinDate: '2025-06-01', paid: false },
-    ],
-    selectedCycle: "quarterly",
-    currentPayDate: "2026년 1분기",
-    payHistory: {
-      quarterly: [
-        { period: '2025년 2분기', unpaidCount: 1 },
-        { period: '2025년 1분기', unpaidCount: 2 },
-      ],
-    },
-  },
-  3: {
-    members: [
-      { id: '1', name: '국태양', joinDate: '2025-06-01', paid: false },
-      { id: '2', name: '임예준', joinDate: '2025-06-01', paid: false },
-      { id: '3', name: '이수빈', joinDate: '2025-06-01', paid: false },
-    ],
-    selectedCycle: null,
-    payHistory: {
-    },
-  },
+const statusToPaid = status =>
+  status === 'PAID' || status === 'paid' || status === true;
+
+const generateRecentMonths = (count = 6) => {
+  const now = dayjs();
+  return Array.from({ length: count }, (_, idx) => {
+    const date = now.subtract(idx, 'month');
+    return {
+      label: date.format('YYYY년 MM월'),
+      year: date.year(),
+      month: date.month() + 1,
+    };
+  });
 };
 
-const AccountManage = ({groupId = 1, navigation}) => {
+const AccountManage = ({ navigation }) => {
+    const route = useRoute();
+    const groupId = route.params?.groupId;
+
     const [modalVisible, setModalVisible] = useState(false);
+    const [currentYear, setCurrentYear] = useState(dayjs().year());
+    const [currentMonth, setCurrentMonth] = useState(dayjs().month() + 1);
+    const [currentDateLabel, setCurrentDateLabel] = useState(dayjs().format('YYYY년 MM월'));
+    const [memberState, setMemberState] = useState([]);
+    const [duesInfo, setDuesInfo] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [hasCycle, setHasCycle] = useState(true);
 
-    // 날짜 모달창 선택시 바뀌는 상태
-    const [currentDate, setCurrentDate] = useState(mockGroups[groupId].currentPayDate);
-    const [selectedHistory, setSelectedHistory] = useState(null);
+    const historyData = useMemo(() => generateRecentMonths(6), []);
 
-    // 현재 렌더링되는 멤버 리스트 (납부/미납부)
-    const [memberState, setMemberState] = useState(mockGroups[groupId].members);
-
-    // 날짜별 납부 상태 저장
-    const [paymentRecords, setPaymentRecords] = useState({});
-    
-
-    const currentGroup = mockGroups[groupId];
-
-    //  선택한 회비 주기 없을 경우 띄우기
-    if (!currentGroup || !currentGroup.selectedCycle) {
-        return (
-            <View style={styles.center}>
-                <SemiBoldText style={styles.noticeText}>선택된 회비 주기가 없어요!</SemiBoldText>
-                <TouchableOpacity style={styles.selectBtn}
-                onPress={() => navigation.navigate("GroupManage")}>
-                    <SemiBoldText style={styles.selectButtonText}>회비 주기 선택</SemiBoldText>
-                </TouchableOpacity>
-            </View>
+    const fetchDues = async (year, month) => {
+      if (!groupId) return;
+      try {
+        setLoading(true);
+        const data = await duesService.getDuesStatus(groupId, year, month);
+        if (!data || data.duesAmount === undefined) {
+          setHasCycle(false);
+          setMemberState([]);
+          setDuesInfo(null);
+          return;
+        }
+        setHasCycle(true);
+        setDuesInfo({
+          currentCycle: data.currentCycle,
+          duesAmount: data.duesAmount,
+          totalMembers: data.totalMembers,
+          paidCount: data.paidCount,
+        });
+        setMemberState(
+          (data.members || []).map(m => ({
+            id: m.userId ?? m.id,
+            name: m.nickname || m.name,
+            status: m.status,
+            paid: statusToPaid(m.status),
+            joinDate: m.joinDate || '',
+          })),
         );
-    }
+      } catch (err) {
+        console.error('회비 현황 조회 실패:', err);
+        Alert.alert('오류', '회비 현황을 불러오지 못했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const {selectedCycle, payHistory} = currentGroup;
-
-    const historyData = payHistory[selectedCycle] || [];
+    useEffect(() => {
+      fetchDues(currentYear, currentMonth);
+    }, [groupId]);
 
     // 납부/미납부
-    const togglePaid = (id) => {
-      const updated = memberState.map(member => 
-        member.id === id ? {...member, paid: !member.paid} : member
-      );
-      setMemberState(updated);
-
-      // 날짜별 상태 저장
-      setPaymentRecords((prev) => ({
-        ...prev,
-        [currentDate]: updated,
-      }))
-    }
+    const togglePaid = async (member) => {
+      if (!groupId) return;
+      const nextPaid = !member.paid;
+      try {
+        await duesService.updateDuesStatus(groupId, {
+          targetUserId: member.id,
+          year: currentYear,
+          month: currentMonth,
+          status: nextPaid ? 'PAID' : 'UNPAID',
+        });
+        setMemberState(prev =>
+          prev.map(m => (m.id === member.id ? { ...m, paid: nextPaid, status: nextPaid ? 'PAID' : 'UNPAID' } : m)),
+        );
+      } catch (err) {
+        console.error('납부 상태 변경 실패:', err);
+        Alert.alert('오류', '납부 상태 변경에 실패했습니다.');
+      }
+    };
 
     const unPaidMembers = memberState.filter(m => !m.paid);
     const paidMembers = memberState.filter(m => m.paid);
 
     // 날짜 선택했을 때 처리
     const handleSelectHistory = (item) => {
-      setCurrentDate(item.period);
+      setCurrentYear(item.year);
+      setCurrentMonth(item.month);
+      setCurrentDateLabel(item.label);
       setModalVisible(false);
-      setSelectedHistory(item);
-
-      // 기존에 저장된 기록 있으면 그대로 가져옴
-      if (paymentRecords[item.period]) {
-        setMemberState(paymentRecords[item.period]);
-      } else {
-        // 없으면 false로!!!
-        setMemberState(prev => prev.map(m => ({...m, paid: false})));
-      }
-    }
+      fetchDues(item.year, item.month);
+    };
 
     const handleResetToCurrent = () => {
-      const now = currentGroup.currentPayDate;
-
-      setCurrentDate(now);
+      const now = dayjs();
+      const label = now.format('YYYY년 MM월');
+      setCurrentYear(now.year());
+      setCurrentMonth(now.month() + 1);
+      setCurrentDateLabel(label);
       setModalVisible(false);
-
-      if (paymentRecords[now]) {
-        setMemberState(paymentRecords[now]);
-      } else {
-        setMemberState(currentGroup.members.map(m => ({...m, paid:false})));
-      }
-    }
+      fetchDues(now.year(), now.month() + 1);
+    };
 
     const renderMember = ({item}) => (
         <View style={styles.memberBox}>
             <View style={styles.memberInfo}>
                 <SemiBoldText style={styles.memberName}>{item.name}</SemiBoldText>
-                <SemiBoldText style={styles.joinDate}>가입일자: {item.joinDate}</SemiBoldText>
+                {item.joinDate ? (
+                  <SemiBoldText style={styles.joinDate}>가입일자: {item.joinDate}</SemiBoldText>
+                ) : null}
             </View>
 
             <TouchableOpacity style={styles.checkButton}
-            onPress={() => togglePaid(item.id)}>
+            onPress={() => togglePaid(item)}>
                 <Image
                   source={
                     item.paid
@@ -153,9 +143,7 @@ const AccountManage = ({groupId = 1, navigation}) => {
 
     const renderHistoryItem = ({item}) => (
         <View style={styles.historyItem}>
-            <SemiBoldText style={styles.historyPeriod}>{item.period}</SemiBoldText>
-            <SemiBoldText style={styles.historyUnpaid}>미납자 {item.unpaidCount}명</SemiBoldText>
-
+            <SemiBoldText style={styles.historyPeriod}>{item.label}</SemiBoldText>
           <TouchableOpacity
             style={styles.historyDetailButton}
             onPress={() => handleSelectHistory(item)}
@@ -174,16 +162,30 @@ const AccountManage = ({groupId = 1, navigation}) => {
             onPress={() => setModalVisible(true)}
           >
             <SemiBoldText style={styles.dropdownButtonText}>
-              {currentDate}
+              {currentDateLabel}
             </SemiBoldText>
             <Image source={require("../../../assets/img/dropdownPurpleIcon.png")}
             style={styles.dropdownIcon} />
           </TouchableOpacity>
 
             <ScrollView>
+              {loading && (
+                <ActivityIndicator style={{marginTop: 20}} color="#7242E2" />
+              )}
 
+              {!hasCycle && !loading && (
+                <View style={styles.center}>
+                  <SemiBoldText style={styles.noticeText}>선택된 회비 주기가 없어요!</SemiBoldText>
+                  <TouchableOpacity style={styles.selectBtn}
+                  onPress={() => navigation.navigate("GroupManage")}>
+                      <SemiBoldText style={styles.selectButtonText}>회비 주기 선택</SemiBoldText>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {hasCycle && (
+              <>
               <SemiBoldText style={styles.sectionTitle}>납부 미완료</SemiBoldText>
-
               {unPaidMembers.length === 0 ? (
                 <SemiBoldText style={styles.sectionText}>
                   미납부한 인원이 없습니다.
@@ -191,7 +193,7 @@ const AccountManage = ({groupId = 1, navigation}) => {
               ) : (
                 <FlatList data={unPaidMembers}
                 renderItem={renderMember}
-                keyExtractor={item => item.id}
+                keyExtractor={item => String(item.id)}
                 scrollEnabled={false}
                 />
               )}
@@ -203,9 +205,11 @@ const AccountManage = ({groupId = 1, navigation}) => {
               ) : (
                   <FlatList data={paidMembers}
                   renderItem={renderMember}
-                  keyExtractor={item => item.id}
+                  keyExtractor={item => String(item.id)}
                   scrollEnabled={false}
                   />
+              )}
+              </>
               )}
                 
                 <Modal visible={modalVisible} transparent animationType='fade'>
@@ -213,7 +217,7 @@ const AccountManage = ({groupId = 1, navigation}) => {
                     <View style={styles.modalContent}>
                       <View style={styles.modalHeader}>
                         <BoldText style={styles.modalTitle}>
-                          {selectedCycle === 'quarterly' ? '분기 선택' : '날짜 선택'}
+                          {'날짜 선택'}
                         </BoldText>
                         <TouchableOpacity onPress={() => setModalVisible(false)}>
                           <Image source={require("../../../assets/img/disabledIcon.png")}
@@ -226,7 +230,7 @@ const AccountManage = ({groupId = 1, navigation}) => {
                         <View style={styles.badge}>
                           <SemiBoldText style={styles.badgeText}>진행 중</SemiBoldText>
                           <SemiBoldText style={styles.currentBadgeDate}>
-                            {currentGroup.currentPayDate}
+                            {dayjs().format('YYYY년 MM월')}
                           </SemiBoldText>
                         </View>
                       </TouchableOpacity>
@@ -234,7 +238,7 @@ const AccountManage = ({groupId = 1, navigation}) => {
                       <FlatList
                         data={historyData}
                         renderItem={renderHistoryItem}
-                        keyExtractor={(item) => item.period}
+                        keyExtractor={(item) => item.label}
                       />
                     </View>
                   </View>

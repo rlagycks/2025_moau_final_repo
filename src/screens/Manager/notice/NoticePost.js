@@ -1,10 +1,15 @@
-import { ScrollView, StyleSheet, View, TouchableOpacity, Image, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native'
+import { ScrollView, StyleSheet, View, TouchableOpacity, Image, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native'
 import React, {useState} from 'react'
 import SemiBoldText from '../../../components/customText/SemiBoldText';
 import { launchImageLibrary } from 'react-native-image-picker';
 import ManagePageNavHeader from '../../../components/nav/ManagePageNavHeader';
+import { useRoute } from '@react-navigation/native';
+import * as noticeService from '../../../services/noticeService';
+import * as receiptService from '../../../services/receiptService';
 
 const NoticePost = ({navigation}) => {
+  const route = useRoute();
+  const teamId = route.params?.groupId || route.params?.teamId;
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [selectedImage, setSelectedImage] = useState([]);
@@ -14,7 +19,7 @@ const NoticePost = ({navigation}) => {
   const [voteOptions, setVoteOptions] = useState([""]);
   const [voteType, setVoteType] = useState("single");
 
-  const currentTime = new Date().toISOString();
+  const [submitting, setSubmitting] = useState(false);
 
 
   const pickImage = () => {
@@ -63,6 +68,52 @@ const NoticePost = ({navigation}) => {
     updated[index] = text;
     setVoteOptions(updated);
   }
+
+  const handleSubmit = async () => {
+    if (!teamId) {
+      Alert.alert("오류", "teamId가 없습니다.");
+      return;
+    }
+    if (!title.trim() || !content.trim()) {
+      Alert.alert("알림", "제목과 내용을 입력해 주세요.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      let imageUrls = [];
+      if (selectedImage.length > 0) {
+        imageUrls = await Promise.all(
+          selectedImage.map(uri => receiptService.uploadImageToS3(teamId, uri)),
+        );
+      }
+
+      const filteredOptions = voteOptions.map(v => v.trim()).filter(Boolean);
+      const poll =
+        useVote && filteredOptions.length > 0
+          ? {
+              title: title || '투표',
+              items: filteredOptions,
+            }
+          : undefined;
+
+      await noticeService.createNotice(teamId, {
+        title: title.trim(),
+        content: content.trim(),
+        images: imageUrls,
+        poll,
+      });
+
+      Alert.alert("성공", "공지 등록이 완료되었습니다.", [
+        { text: "확인", onPress: () => navigation.goBack() },
+      ]);
+    } catch (err) {
+      console.error("공지 등록 실패:", err);
+      Alert.alert("오류", "공지 등록에 실패했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView style={{flex: 1}}
@@ -184,22 +235,13 @@ const NoticePost = ({navigation}) => {
                     </View>
                   </View>
                   <View style={styles.postButtonSection}>
-                      <TouchableOpacity style={styles.postButton}
-                      onPress={() => navigation.navigate("MyNoticeDetail", {
-                        title: title,
-                        content: content,
-                        authorName: "고하늘",
-                        createdAt: currentTime,
-                        image: selectedImage,
-                        vote: useVote
-                        ? {
-                          type: voteType,
-                          options: voteOptions,
-                        }
-                        :
-                        null,
-                      })}>
-                        <SemiBoldText style={styles.postText}>등록하기</SemiBoldText>
+                      <TouchableOpacity style={[styles.postButton, submitting && {opacity: 0.6}]}
+                      onPress={handleSubmit} disabled={submitting}>
+                        {submitting ? (
+                          <ActivityIndicator color="#FFFFFF" />
+                        ) : (
+                          <SemiBoldText style={styles.postText}>등록하기</SemiBoldText>
+                        )}
                       </TouchableOpacity>
                     </View>
                 

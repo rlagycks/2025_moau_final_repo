@@ -21,3 +21,16 @@ export const getTransactions = async teamId => {
     throw err;
   }
 };
+
+export const registerAccount = async (teamId, accountNumber, bankName) => {
+  try {
+    const res = await api.post(`/teams/${teamId}/accounting/accounts`, {
+      accountNumber,
+      bankName,
+    });
+    return unwrap(res);
+  } catch (err) {
+    console.error('계좌 등록/수정 실패:', err);
+    throw err;
+  }
+};

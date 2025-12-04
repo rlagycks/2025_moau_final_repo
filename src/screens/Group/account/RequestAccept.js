@@ -14,14 +14,26 @@ const RequestAccept = ({navigation}) => {
     const {receipt = {}, group} = route.params || {};
     const teamId = group?.groupId || route.params?.teamId;
 
-    const [desc, setDesc] = useState("");
-    const [submitting, setSubmitting] = useState(false);
+  const [desc, setDesc] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
     const formattedDate = useMemo(() => {
         const date = receipt.date || receipt.transactionDate || receipt.createdAt;
         if (!date) return '';
         return dayjs(date).format("YYYY-MM-DD");
     }, [receipt]);
+
+    const extractKeyFromUrl = (url) => {
+        if (!url) return '';
+        try {
+            const u = new URL(url);
+            return u.pathname.replace(/^\/+/, '');
+        } catch (e) {
+            const parts = url.split('//');
+            const path = parts[1]?.substring(parts[1].indexOf('/') + 1) ?? url;
+            return path.replace(/^\/+/, '');
+        }
+    };
 
     const handleSubmit = async () => {
         if (!teamId) {
@@ -37,9 +49,10 @@ const RequestAccept = ({navigation}) => {
             setSubmitting(true);
 
             const imageUrl = await receiptService.uploadImageToS3(teamId, receipt.imageUri);
+            const s3Key = extractKeyFromUrl(imageUrl);
 
             const payload = {
-                imageUrl,
+                s3Key,
                 transactionDate: formattedDate || dayjs().format("YYYY-MM-DD"),
                 storeName: receipt.place || receipt.storeName || "가맹점",
                 amount: Number(receipt.amount) || 0,

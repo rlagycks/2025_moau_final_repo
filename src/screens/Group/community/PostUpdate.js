@@ -8,7 +8,6 @@ import {
   Alert,
 } from 'react-native';
 import React, { useState } from 'react';
-import BoldText from '../../../components/customText/BoldText';
 import SemiBoldText from '../../../components/customText/SemiBoldText';
 import PageNavHeader from '../../../components/nav/PageNavHeader';
 import { createPost } from '../../../services/communityService';
@@ -30,9 +29,9 @@ const CommunityPostUpdate = ({ navigation, route }) => {
     }
 
     const postData = {
-      title,
-      content,
-      anonymous: isAnonymous,
+      title: title.trim(),
+      content: content.trim(),
+      isAnonymous: isAnonymous,
     };
 
     try {

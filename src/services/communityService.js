@@ -45,6 +45,17 @@ export const deletePost = async (teamId, postId) => {
   }
 };
 
+// 게시글 수정
+export const updatePost = async (teamId, postId, postData) => {
+  try {
+    const res = await api.put(`/teams/${teamId}/posts/${postId}`, postData);
+    return res.data.data;
+  } catch (err) {
+    console.error('게시글 수정 실패: ', err);
+    throw err;
+  }
+};
+
 // 댓글 작성
 export const createComment = async (teamId, postId, commentData) => {
   try {
